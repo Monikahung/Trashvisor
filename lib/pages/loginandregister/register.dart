@@ -3,24 +3,25 @@ import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage;
+import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase
 
 /// ===================================================================
 ///  WARNA (samakan dengan login)
 /// ===================================================================
 class AppColors {
-  static const Color green     = Color(0xFF4CAF50);
+  static const Color green = Color(0xFF4CAF50);
   static const Color deepGreen = Color(0xFF244D24);
   static const Color blackText = Colors.black87;
   static const Color textMuted = Colors.black54;
-  static const Color border    = Color(0xFFE0E0E0);
-  static const Color fieldBg   = Colors.white;
+  static const Color border = Color(0xFFE0E0E0);
+  static const Color fieldBg = Colors.white;
 
   // Top-banner
-  static const Color errorBg   = Color(0xFFEA4335);
+  static const Color errorBg = Color(0xFFEA4335);
   static const Color errorText = Colors.white;
 
   // (NEW) Sukses
-  static const Color successBg   = Color(0xFF34A853);
+  static const Color successBg = Color(0xFF34A853);
   static const Color successText = Colors.white;
 }
 
@@ -29,49 +30,57 @@ class AppColors {
 /// ===================================================================
 class RegisterDimens {
   // ---------- HERO ----------
-  static const double heroRatioTall  = 0.30;
+  static const double heroRatioTall = 0.30;
   static const double heroRatioShort = 0.34;
-  static const String heroAsset      = 'assets/illustrations/register_top.png';
+  static const String heroAsset = 'assets/illustrations/register_top.png';
 
   // ---------- KONTEN ----------
   static const double contentMaxWidth = 500;
-  static const double sidePadding     = 24;  // <<< padding kiri/kanan konten
+  static const double sidePadding = 24; // <<< padding kiri/kanan konten
 
   // ---------- ATAS ----------
-  static const double gapAfterHero  = -35; // <<< boleh negatif (narik konten)
-  static const double brandTopGap   = 0;
+  static const double gapAfterHero = -35; // <<< boleh negatif (narik konten)
+  static const double brandTopGap = 0;
   static const double logoTopOffset = -6;
 
   // ---------- SPACING ----------
-  static const double gapAfterBrand     = 12; // brand → judul
-  static const double gapTitleToDesc    = 8;  // judul → deskripsi
-  static const double gapAfterDesc      = 20; // deskripsi → field pertama
-  static const double gapBetweenFields  = 18; // antar field
-  static const double gapBeforeButton   = 20; // field terakhir → tombol
-  static const double bottomPadding     = 24; // padding bawah
+  static const double gapAfterBrand = 12; // brand → judul
+  static const double gapTitleToDesc = 8; // judul → deskripsi
+  static const double gapAfterDesc = 20; // deskripsi → field pertama
+  static const double gapBetweenFields = 18; // antar field
+  static const double gapBeforeButton = 20; // field terakhir → tombol
+  static const double bottomPadding = 24; // padding bawah
 
   // ---------- BRAND ----------
-  static const double     brandIcon       = 40;
+  static const double brandIcon = 40;
   static const EdgeInsets brandTextMargin = EdgeInsets.only(left: 15);
 
   // ---------- TIPOGRAFI ----------
   static const double title = 22;
-  static const double body  = 14;
+  static const double body = 14;
 
   // ---------- FIELD & BUTTON ----------
   static const double fieldHeight = 52;
   static const double fieldRadius = 14;
-  static const EdgeInsets fieldContentPadding =
-      EdgeInsets.symmetric(horizontal: 14, vertical: 14);
+  static const EdgeInsets fieldContentPadding = EdgeInsets.symmetric(
+    horizontal: 14,
+    vertical: 14,
+  );
   static const double btnHeight = 54;
   static const double btnRadius = 16;
 
   // ---------- BANNER ----------
-  static const Duration bannerInDuration  = Duration(milliseconds: 220);
+  static const Duration bannerInDuration = Duration(milliseconds: 220);
   static const Duration bannerOutDuration = Duration(milliseconds: 180);
-  static const Duration bannerShowTime    = Duration(milliseconds: 2000);
-  static const double  bannerSideMargin   = 12;
+  static const Duration bannerShowTime = Duration(milliseconds: 2000);
+  static const double bannerSideMargin = 12;
 }
+
+/// (NEW) Parameter kebijakan password (ubah di sini kalau kebijakan berubah)
+const int _kMinPasswordLength = 8;
+final RegExp _hasUpper = RegExp(r'[A-Z]');
+final RegExp _hasLower = RegExp(r'[a-z]');
+final RegExp _hasDigit = RegExp(r'[0-9]');
 
 /// ===================================================================
 ///  (NEW) HELPER BANNER — reusable, rapi, 1 controller saja
@@ -85,8 +94,15 @@ class _TopBanner {
   Color _bg = AppColors.errorBg;
   Color _fg = AppColors.errorText;
 
-  _TopBanner({required TickerProvider vsync, required Duration inDur, required Duration outDur})
-      : _ctl = AnimationController(vsync: vsync, duration: inDur, reverseDuration: outDur) {
+  _TopBanner({
+    required TickerProvider vsync,
+    required Duration inDur,
+    required Duration outDur,
+  }) : _ctl = AnimationController(
+         vsync: vsync,
+         duration: inDur,
+         reverseDuration: outDur,
+       ) {
     _ctl.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) {
         _entry?.remove();
@@ -103,6 +119,7 @@ class _TopBanner {
     Duration showFor = const Duration(milliseconds: 2000),
     double sideMargin = 12,
     double topOffset = 8,
+    IconData icon = Icons.error_outline, // (NEW) ikon default untuk error
   }) {
     _timer?.cancel();
     _message = message;
@@ -118,9 +135,17 @@ class _TopBanner {
           left: sideMargin,
           right: sideMargin,
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0, -0.2), end: Offset.zero).animate(
-              CurvedAnimation(parent: _ctl, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic),
-            ),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, -0.2),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _ctl,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                ),
             child: FadeTransition(
               opacity: _ctl,
               child: Material(
@@ -128,15 +153,26 @@ class _TopBanner {
                 borderRadius: BorderRadius.circular(12),
                 color: _bg,
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.error_outline, color: Colors.white, size: 20),
+                      Icon(
+                        icon,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _message,
-                          style: TextStyle(color: _fg, fontSize: 14, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: _fg,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -178,16 +214,15 @@ class RegisterPage extends StatefulWidget {
 
 class _RegisterPageState extends State<RegisterPage>
     with SingleTickerProviderStateMixin {
-
   // ---------------------- Form controllers ----------------------
-  final _nameC    = TextEditingController();
-  final _emailC   = TextEditingController();
-  final _passC    = TextEditingController();
+  final _nameC = TextEditingController();
+  final _emailC = TextEditingController();
+  final _passC = TextEditingController();
   final _confirmC = TextEditingController();
 
   bool _obscure1 = true;
   bool _obscure2 = true;
-  bool _agree    = false;
+  bool _agree = false;
 
   // (NEW) error teks di bawah field password (null = tidak tampil)
   String? _passErrorText; // akan diisi bila tidak memenuhi syarat
@@ -245,10 +280,10 @@ class _RegisterPageState extends State<RegisterPage>
   String? _buildPasswordError(String s) {
     if (s.isEmpty) return null; // kosong → tidak perlu merah dulu
     final need = <String>[];
-    if (s.length < 8) need.add('minimal 8 karakter');
-    if (!RegExp(r'[A-Z]').hasMatch(s)) need.add('huruf besar');
-    if (!RegExp(r'[a-z]').hasMatch(s)) need.add('huruf kecil');
-    if (!RegExp(r'[0-9]').hasMatch(s)) need.add('angka');
+    if (s.length < _kMinPasswordLength) need.add('minimal $_kMinPasswordLength karakter');
+    if (!_hasUpper.hasMatch(s)) need.add('huruf besar');
+    if (!_hasLower.hasMatch(s)) need.add('huruf kecil');
+    if (!_hasDigit.hasMatch(s)) need.add('angka');
     if (need.isEmpty) return null;
     // NB: kode unik/simbol opsional → tidak dimasukkan ke pesan
     return 'Password harus ${need.join(', ')}.';
@@ -265,12 +300,33 @@ class _RegisterPageState extends State<RegisterPage>
   // ---------------------- Aksi tombol Kirim ----------------------
   void _onSubmit() async {
     // Cek berurutan dari atas agar pesan spesifik
-    if (_isBlank(_nameC.text))        { _banner.show(context, 'Nama lengkap belum terisi',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
-    if (_isBlank(_emailC.text))       { _banner.show(context, 'Email anda belum terisi',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
-    if (!_isValidEmail(_emailC.text)) { _banner.show(context, 'Format email tidak valid',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
+    if (_isBlank(_nameC.text)) {
+      _banner.show(
+        context,
+        'Nama lengkap belum terisi',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
+    if (_isBlank(_emailC.text)) {
+      _banner.show(
+        context,
+        'Email anda belum terisi',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
+    if (!_isValidEmail(_emailC.text)) {
+      _banner.show(
+        context,
+        'Format email tidak valid',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
 
     // (NEW) Cek password kuat → tampilkan error di bawah field, bukan banner
     final passErr = _buildPasswordError(_passC.text);
@@ -279,46 +335,106 @@ class _RegisterPageState extends State<RegisterPage>
       return;
     }
 
-    if (_isBlank(_confirmC.text))     { _banner.show(context, 'Konfirmasi password belum terisi',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
-    if (_passC.text != _confirmC.text){ _banner.show(context, 'Konfirmasi password tidak cocok',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
-    if (!_agree)                      { _banner.show(context, 'Harap setujui Ketentuan dan Kebijakan Privasi',
-        sideMargin: RegisterDimens.bannerSideMargin, showFor: RegisterDimens.bannerShowTime); return; }
+    if (_isBlank(_confirmC.text)) {
+      _banner.show(
+        context,
+        'Konfirmasi password belum terisi',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
+    if (_passC.text != _confirmC.text) {
+      _banner.show(
+        context,
+        'Konfirmasi password tidak cocok',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
+    if (!_agree) {
+      _banner.show(
+        context,
+        'Harap setujui Ketentuan dan Kebijakan Privasi',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+      return;
+    }
 
     // Kirim data register ke backend
-    // (NEW) Simulasi sukses: tampilkan banner hijau lalu pindah ke LoginPage
-    _banner.show(
-      context,
-      'Pendaftaran berhasil!',
-      bg: AppColors.successBg,
-      fg: AppColors.successText,
-      sideMargin: RegisterDimens.bannerSideMargin,
-      showFor: const Duration(milliseconds: 900), // sebentar, lalu navigate
-    );
+    // (NEW) Registrasi dengan Supabase Auth
+    try {
+      final supa = Supabase.instance.client;
 
-    await Future.delayed(const Duration(milliseconds: 900));
-    if (!mounted) return;
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
-    );
+      // (NOTE) metadata 'full_name' akan ikut ke user_metadata dan (opsional)
+      // bisa dimirror ke table profiles via trigger SQL yang sudah kamu setup.
+      final res = await supa.auth.signUp(
+        email: _emailC.text.trim(),
+        password: _passC.text,
+        // metadata opsional, bisa dipakai trigger untuk isi profiles
+        data: {'full_name': _nameC.text.trim()},
+      );
+
+      // Tergantung setting email confirmation. Di sini langsung arahkan ke Login.
+      if (!mounted) return;
+
+      // (NEW) gunakan ikon sukses untuk banner sukses
+      _banner.show(
+        context,
+        res.user == null
+            ? 'Registrasi berhasil, cek email untuk konfirmasi.'
+            : 'Pendaftaran berhasil!',
+        bg: AppColors.successBg,
+        fg: AppColors.successText,
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: const Duration(milliseconds: 900),
+        icon: Icons.check_circle_outline,
+      );
+
+      await Future.delayed(const Duration(milliseconds: 900));
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
+      );
+    } on AuthException catch (e) {
+      _banner.show(
+        context,
+        e.message,
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+    } catch (_) {
+      _banner.show(
+        context,
+        'Terjadi kesalahan. Coba lagi.',
+        sideMargin: RegisterDimens.bannerSideMargin,
+        showFor: RegisterDimens.bannerShowTime,
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    final media   = MediaQuery.of(context);
-    final size    = media.size;
+    final media = MediaQuery.of(context);
+    final size = media.size;
     final isShort = size.height < 700;
 
     // Tinggi hero responsif (atur di RegisterDimens.heroRatio*)
-    final heroH = size.height *
-        (isShort ? RegisterDimens.heroRatioShort : RegisterDimens.heroRatioTall);
+    final heroH =
+        size.height *
+        (isShort
+            ? RegisterDimens.heroRatioShort
+            : RegisterDimens.heroRatioTall);
 
     // Terapkan strategi "narik konten ke atas" jika gapAfterHero negatif
-    final double safeTopPad =
-        RegisterDimens.gapAfterHero > 0 ? RegisterDimens.gapAfterHero : 0;
-    final double pullUpY =
-        RegisterDimens.gapAfterHero < 0 ? RegisterDimens.gapAfterHero : 0;
+    final double safeTopPad = RegisterDimens.gapAfterHero > 0
+        ? RegisterDimens.gapAfterHero
+        : 0;
+    final double pullUpY = RegisterDimens.gapAfterHero < 0
+        ? RegisterDimens.gapAfterHero
+        : 0;
 
     return Scaffold(
       body: GestureDetector(
@@ -361,11 +477,15 @@ class _RegisterPageState extends State<RegisterPage>
                           RegisterDimens.bottomPadding,
                         ),
                         child: Transform.translate(
-                          offset: Offset(0, pullUpY), // narik ke atas jika negatif
+                          offset: Offset(
+                            0,
+                            pullUpY,
+                          ), // narik ke atas jika negatif
                           child: Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(
-                                maxWidth: RegisterDimens.contentMaxWidth),
+                                maxWidth: RegisterDimens.contentMaxWidth,
+                              ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -375,10 +495,13 @@ class _RegisterPageState extends State<RegisterPage>
                                       assetPath: 'assets/images/logo_apk.png',
                                       text: 'Trashvisor',
                                       iconSize: RegisterDimens.brandIcon,
-                                      textMargin: RegisterDimens.brandTextMargin,
+                                      textMargin:
+                                          RegisterDimens.brandTextMargin,
                                     ),
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapAfterBrand),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapAfterBrand,
+                                  ),
 
                                   // ------------------------- TITLE -------------------------
                                   const Center(
@@ -393,12 +516,16 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapTitleToDesc),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapTitleToDesc,
+                                  ),
 
                                   // ------------------------ SUBTITLE -----------------------
                                   const Center(
                                     child: Padding(
-                                      padding: EdgeInsets.symmetric(horizontal: 8),
+                                      padding: EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
                                       child: Text(
                                         'Daftar sekarang dan jadilah bagian dari \n'
                                         'perubahan demi lingkungan yang lebih bersih',
@@ -411,7 +538,9 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ),
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapAfterDesc),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapAfterDesc,
+                                  ),
 
                                   // --------------------------- FORM ------------------------
                                   const _FieldLabel('Nama'),
@@ -422,7 +551,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     prefix: const Icon(Icons.person_outline),
                                     textInputAction: TextInputAction.next,
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapBetweenFields),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapBetweenFields,
+                                  ),
 
                                   const _FieldLabel('Email'),
                                   const SizedBox(height: 8),
@@ -433,7 +564,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     textInputAction: TextInputAction.next,
                                     prefix: const Icon(Icons.mail_outline),
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapBetweenFields),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapBetweenFields,
+                                  ),
 
                                   const _FieldLabel('Buat Password'),
                                   const SizedBox(height: 8),
@@ -444,8 +577,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     textInputAction: TextInputAction.next,
                                     prefix: const Icon(Icons.lock_outline),
                                     suffix: IconButton(
-                                      onPressed: () =>
-                                          setState(() => _obscure1 = !_obscure1),
+                                      onPressed: () => setState(
+                                        () => _obscure1 = !_obscure1,
+                                      ),
                                       icon: Icon(
                                         _obscure1
                                             ? Icons.visibility_off_outlined
@@ -467,7 +601,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     ),
                                   ],
 
-                                  const SizedBox(height: RegisterDimens.gapBetweenFields),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapBetweenFields,
+                                  ),
 
                                   const _FieldLabel('Konfirmasi Password'),
                                   const SizedBox(height: 8),
@@ -478,8 +614,9 @@ class _RegisterPageState extends State<RegisterPage>
                                     textInputAction: TextInputAction.done,
                                     prefix: const Icon(Icons.lock_outline),
                                     suffix: IconButton(
-                                      onPressed: () =>
-                                          setState(() => _obscure2 = !_obscure2),
+                                      onPressed: () => setState(
+                                        () => _obscure2 = !_obscure2,
+                                      ),
                                       icon: Icon(
                                         _obscure2
                                             ? Icons.visibility_off_outlined
@@ -491,14 +628,17 @@ class _RegisterPageState extends State<RegisterPage>
 
                                   // --------------------- CHECKBOX AGREE ---------------------
                                   Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
                                       SizedBox(
                                         width: 24,
                                         height: 24,
                                         child: Checkbox.adaptive(
                                           value: _agree,
-                                          onChanged: (v) => setState(() => _agree = v ?? false),
+                                          onChanged: (v) => setState(
+                                            () => _agree = v ?? false,
+                                          ),
                                           activeColor: AppColors.deepGreen,
                                         ),
                                       ),
@@ -507,9 +647,13 @@ class _RegisterPageState extends State<RegisterPage>
                                         child: RichText(
                                           text: TextSpan(
                                             style: const TextStyle(
-                                              color: Colors.black87, fontSize: 13),
+                                              color: Colors.black87,
+                                              fontSize: 13,
+                                            ),
                                             children: [
-                                              const TextSpan(text: 'Saya menyetujui '),
+                                              const TextSpan(
+                                                text: 'Saya menyetujui ',
+                                              ),
                                               TextSpan(
                                                 text: 'Ketentuan Penggunaan',
                                                 style: const TextStyle(
@@ -518,9 +662,13 @@ class _RegisterPageState extends State<RegisterPage>
                                                 ),
                                                 recognizer: TapGestureRecognizer()
                                                   ..onTap = () {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('Buka Ketentuan Penggunaan'),
+                                                        content: Text(
+                                                          'Buka Ketentuan Penggunaan',
+                                                        ),
                                                       ),
                                                     );
                                                   },
@@ -534,9 +682,13 @@ class _RegisterPageState extends State<RegisterPage>
                                                 ),
                                                 recognizer: TapGestureRecognizer()
                                                   ..onTap = () {
-                                                    ScaffoldMessenger.of(context).showSnackBar(
+                                                    ScaffoldMessenger.of(
+                                                      context,
+                                                    ).showSnackBar(
                                                       const SnackBar(
-                                                        content: Text('Buka Kebijakan Privasi'),
+                                                        content: Text(
+                                                          'Buka Kebijakan Privasi',
+                                                        ),
                                                       ),
                                                     );
                                                   },
@@ -547,7 +699,9 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: RegisterDimens.gapBeforeButton),
+                                  const SizedBox(
+                                    height: RegisterDimens.gapBeforeButton,
+                                  ),
 
                                   // ------------------------- BUTTON ------------------------
                                   SizedBox(
@@ -557,12 +711,15 @@ class _RegisterPageState extends State<RegisterPage>
                                       onPressed: _onSubmit, // validasi + banner
                                       style: ElevatedButton.styleFrom(
                                         // warna tombol Kirim khusus (#528123)
-                                        backgroundColor: const Color(0xFF528123),
+                                        backgroundColor: const Color(
+                                          0xFF528123,
+                                        ),
                                         foregroundColor: Colors.white,
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
                                           borderRadius: BorderRadius.circular(
-                                              RegisterDimens.btnRadius),
+                                            RegisterDimens.btnRadius,
+                                          ),
                                         ),
                                       ),
                                       child: const Text(
@@ -583,9 +740,13 @@ class _RegisterPageState extends State<RegisterPage>
                                     child: Text.rich(
                                       TextSpan(
                                         style: const TextStyle(
-                                          color: Colors.black87, fontSize: 13),
+                                          color: Colors.black87,
+                                          fontSize: 13,
+                                        ),
                                         children: [
-                                          const TextSpan(text: 'Sudah punya akun? '),
+                                          const TextSpan(
+                                            text: 'Sudah punya akun? ',
+                                          ),
                                           TextSpan(
                                             text: 'Masuk Sekarang',
                                             style: const TextStyle(
@@ -670,7 +831,8 @@ class _AppTextField extends StatelessWidget {
           fillColor: AppColors.fieldBg,
           hintText: hint,
           hintStyle: const TextStyle(color: AppColors.textMuted),
-          contentPadding: RegisterDimens.fieldContentPadding, // padding dalam field
+          contentPadding:
+              RegisterDimens.fieldContentPadding, // padding dalam field
           prefixIcon: prefix,
           suffixIcon: suffix,
           enabledBorder: OutlineInputBorder(
@@ -678,7 +840,10 @@ class _AppTextField extends StatelessWidget {
             borderRadius: BorderRadius.circular(RegisterDimens.fieldRadius),
           ),
           focusedBorder: OutlineInputBorder(
-            borderSide: const BorderSide(color: AppColors.deepGreen, width: 1.2),
+            borderSide: const BorderSide(
+              color: AppColors.deepGreen,
+              width: 1.2,
+            ),
             borderRadius: BorderRadius.circular(RegisterDimens.fieldRadius),
           ),
         ),

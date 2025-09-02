@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:trashvisor/pages/loginandregister/register.dart'
-    show RegisterPage;
+import 'package:trashvisor/pages/loginandregister/register.dart' show RegisterPage;
 import '../home_profile_notifications/home.dart' show HomePage;
 import 'package:camera/camera.dart';
+import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase auth
 
 /// ===================================================================
 ///  PALET WARNA GLOBAL (ubah di sini jika mau ganti warna)
@@ -20,6 +20,10 @@ class AppColors {
   // Warna & teks untuk top-banner (notifikasi di atas)
   static const Color errorBg = Color(0xFFEA4335);
   static const Color errorText = Colors.white;
+
+  // (NEW) warna sukses untuk banner “berhasil”
+  static const Color successBg = Color(0xFF34A853);
+  static const Color successText = Colors.white;
 }
 
 /// ===================================================================
@@ -86,6 +90,26 @@ class LoginDimens {
 }
 
 /// ===================================================================
+///  LOCALE STRING (ID) — pusat semua teks banner di sini
+///  SAFE TO CHANGE: Silakan edit untuk kebutuhan copywriting
+/// ===================================================================
+/// (NEW) Semua copy untuk error/sukses ditaruh di satu tempat agar
+/// mudah dirawat/diterjemahkan di kemudian hari.
+class L10n {
+  static const loginInvalid =
+      'Email atau kata sandi salah.'; // aman: generik (anti user-enum)
+  static const emailNotConfirmed =
+      'Email belum dikonfirmasi. Silakan cek kotak masuk untuk verifikasi.';
+  static const userNotFound =
+      'Akun tidak ditemukan. Silakan daftar terlebih dahulu.';
+  static const tooManyRequests =
+      'Terlalu banyak percobaan. Coba lagi beberapa menit lagi.';
+  static const networkError =
+      'Tidak dapat terhubung ke server. Periksa koneksi internet Anda.';
+  static const unknown = 'Terjadi kesalahan. Coba lagi.';
+}
+
+/// ===================================================================
 ///  LOGIN PAGE — Opsi B: SATU AnimationController di-reuse
 /// ===================================================================
 class LoginPage extends StatefulWidget {
@@ -135,9 +159,11 @@ class _LoginPageState extends State<LoginPage>
     // (2) Siapkan recognizer untuk link "Daftar Sekarang"
     _toRegister = TapGestureRecognizer()
       ..onTap = () {
-        Navigator.of(
-          context,
-        ).push(MaterialPageRoute(builder: (_) => RegisterPage(cameras: widget.cameras)));
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => RegisterPage(cameras: widget.cameras),
+          ),
+        );
       };
   }
 
@@ -255,8 +281,79 @@ class _LoginPageState extends State<LoginPage>
     });
   }
 
+  // (NEW) Ambil nama lengkap dari: metadata user → tabel profiles → fallback email
+  Future<String?> _resolveFullName() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return null;
+
+    // 1) user_metadata (mis. 'full_name' saat register)
+    final meta = user.userMetadata;
+    if (meta != null) {
+      for (final key in ['full_name', 'name', 'nama']) {
+        final v = meta[key];
+        if (v is String && v.trim().isNotEmpty) return v.trim();
+      }
+    }
+
+    // 2) tabel profiles (kolom full_name)
+    try {
+      final data = await client
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .maybeSingle();
+      final name = (data?['full_name'] as String?)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {
+      // abaikan error baca profil
+    }
+
+    // 3) fallback dari email
+    final email = user.email;
+    if (email != null && email.isNotEmpty) {
+      return email.split('@').first;
+    }
+    return null;
+  }
+
+  // (NEW) Ekstrak nama depan dari nama lengkap
+  String _firstNameOf(String? fullName) {
+    if (fullName == null || fullName.trim().isEmpty) return 'Pengguna';
+    final parts = fullName.trim().split(RegExp(r'\s+'));
+    return parts.first;
+  }
+
+  /// (NEW) Map pesan Supabase → Bahasa Indonesia.
+  /// SECURITY NOTE:
+  /// - Supabase mengembalikan "Invalid login credentials" untuk email ATAU
+  ///   password yang salah. Di sisi klien **tidak aman** & **tidak akurat**
+  ///   membedakan mana yang salah (anti user-enumeration).
+  /// - Karena itu, kita tampilkan pesan generik yang aman.
+  /// - Beberapa pesan lain kita tangani bila Supabase memang memberi sinyal jelas.
+  String _mapAuthError(Object e) {
+    final raw = (e is AuthException ? e.message : e.toString()).toLowerCase();
+
+    if (raw.contains('invalid login credentials')) {
+      return L10n.loginInvalid;
+    }
+    if (raw.contains('email not confirmed')) {
+      return L10n.emailNotConfirmed;
+    }
+    if (raw.contains('user not found') || raw.contains('invalid email')) {
+      return L10n.userNotFound;
+    }
+    if (raw.contains('too many requests') || raw.contains('rate limit')) {
+      return L10n.tooManyRequests;
+    }
+    if (raw.contains('network') || raw.contains('timeout')) {
+      return L10n.networkError;
+    }
+    return L10n.unknown; // fallback aman
+  }
+
   // ---------------------- Aksi tombol Masuk ----------------------
-  void _onLogin() {
+  void _onLogin() async {
     // Validasi berurutan (meniru "cek dari atas")
     if (_isBlank(_emailC.text)) {
       _showTopBanner('Email anda belum terisi');
@@ -273,19 +370,50 @@ class _LoginPageState extends State<LoginPage>
 
     // Proses login sebenarnya (call API di sini)
 
-    // (NEW) CONTOH: kalau sukses → navigasi ke HomePage (simulasi)
-    Navigator.of(context).pushReplacement(
-      MaterialPageRoute(
-        builder: (_) => HomePage(
-          cameras: widget.cameras,
-        ), // <- siapkan HomePage sendiri
-        settings: const RouteSettings(name: 'HomePage'),
-      ),
-    );
+    // (NEW) Login dengan Supabase Auth
+    try {
+      final supa = Supabase.instance.client;
+      await supa.auth.signInWithPassword(
+        email: _emailC.text.trim(),
+        password: _passC.text,
+      );
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(const SnackBar(content: Text('Login dikirim!')));
+      // (NEW) Ambil nama, tampilkan banner hijau “berhasil”, lalu navigasi
+      final fullName = await _resolveFullName();
+      final firstName = _firstNameOf(fullName);
+
+      _showTopBanner(
+        'Selamat datang, $firstName!',
+        bg: AppColors.successBg,
+        fg: AppColors.successText,
+      );
+
+      // (NEW) beri jeda sebentar agar banner terlihat
+      await Future.delayed(const Duration(milliseconds: 900));
+
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) =>
+              HomePage(cameras: widget.cameras), // <- siapkan HomePage sendiri
+          settings: const RouteSettings(name: 'HomePage'),
+        ),
+      );
+    } on AuthException catch (e) {
+      _showTopBanner(_mapAuthError(e)); // (NEW) tampilkan pesan ID yang rapi
+    } catch (e) {
+      _showTopBanner(_mapAuthError(e)); // (NEW) fallback non-AuthException
+    }
+
+    // (SIMULASI lama) — dibiarkan sebagai referensi:
+    // Navigator.of(context).pushReplacement(
+    //   MaterialPageRoute(
+    //     builder: (_) => HomePage(cameras: widget.cameras),
+    //     settings: const RouteSettings(name: 'HomePage'),
+    //   ),
+    // );
+    // ScaffoldMessenger.of(context)
+    //   .showSnackBar(const SnackBar(content: Text('Login dikirim!')));
   }
 
   @override

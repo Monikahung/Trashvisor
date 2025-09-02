@@ -16,6 +16,11 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
   final TextEditingController _controller = TextEditingController();
   final List<Map<String, String>> _messages = [];
 
+  // (NEW) Flag untuk mengatur visibilitas tombol saran cepat.
+  // Default-nya true (ditampilkan setelah landing), dan akan di-set false
+  // segera setelah user memilih salah satu saran.
+  bool _suggestionsVisible = true;
+
   final String systemPrompt =
       "Anda adalah Trash Chatbot, asisten AI yang fokus pada edukasi pengelolaan sampah. "
       "Anda harus memberikan informasi akurat dan relevan tentang daur ulang, pemilahan sampah, "
@@ -174,7 +179,10 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
                   return Column(
                     children: [
                       _buildMessageBubble(message, isUser),
-                      if (isFirstMessage) _buildQuestionSuggestions(),
+                      // (NEW) Tampilkan saran cepat hanya sekali di bawah pesan awal,
+                      // dan hanya jika _suggestionsVisible masih true.
+                      if (isFirstMessage && _suggestionsVisible)
+                        _buildQuestionSuggestions(),
                     ],
                   );
                 },
@@ -331,6 +339,11 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
         children: questions.map((question) {
           return ElevatedButton(
             onPressed: () {
+              // (NEW) Begitu user memilih salah satu saran:
+              // 1) Sembunyikan semua saran agar tidak tampil lagi.
+              // 2) Masukkan teks ke TextField (agar _sendMessage konsisten)
+              // 3) Panggil _sendMessage untuk mengirim.
+              setState(() => _suggestionsVisible = false);
               _controller.text = question;
               _sendMessage();
             },
