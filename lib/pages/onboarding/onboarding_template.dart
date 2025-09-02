@@ -4,7 +4,6 @@ import 'package:camera/camera.dart';
 class OnboardingTemplate extends StatelessWidget {
   final List<CameraDescription> cameras;
 
-
   final String illustrationAsset;
   final String title;
   final String description;

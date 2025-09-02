@@ -241,15 +241,6 @@ class _RegisterPageState extends State<RegisterPage>
     return re.hasMatch(s.trim());
   }
 
-  // (NEW) validasi kekuatan password (minimal 8, A-Z, a-z, 0-9; simbol opsional)
-  bool _isStrongPassword(String s) {
-    if (s.length < 8) return false;
-    final hasUpper = RegExp(r'[A-Z]').hasMatch(s);
-    final hasLower = RegExp(r'[a-z]').hasMatch(s);
-    final hasDigit = RegExp(r'[0-9]').hasMatch(s);
-    return hasUpper && hasLower && hasDigit; // simbol opsional
-  }
-
   // (NEW) buat pesan error dinamis yang informatif (di bawah field password)
   String? _buildPasswordError(String s) {
     if (s.isEmpty) return null; // kosong → tidak perlu merah dulu

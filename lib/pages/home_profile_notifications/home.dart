@@ -5,6 +5,7 @@ import 'profile.dart';
 import 'notifications.dart';
 import '../trashvision/scan_camera.dart';
 import '../trashchatbot/chatbot.dart';
+import '../trashcapsule/capsule.dart';
 
 // HomePage diubah menjadi StatefulWidget
 class HomePage extends StatefulWidget {
@@ -20,13 +21,13 @@ class HomePage extends StatefulWidget {
 class _HomePageState extends State<HomePage> {
   // Variabel untuk menyimpan daftar kamera yang diterima.
   // Ini akan digunakan saat menavigasi ke ScanCamera.
-  List<CameraDescription>? _availableCameras; 
+  List<CameraDescription>? _availableCameras;
 
   @override
   void initState() {
     super.initState();
     // Inisialisasi _availableCameras dengan widget.cameras
-    _availableCameras = widget.cameras; 
+    _availableCameras = widget.cameras;
   }
 
   @override
@@ -35,10 +36,7 @@ class _HomePageState extends State<HomePage> {
       backgroundColor: AppColors.whiteSmoke,
       body: SingleChildScrollView(
         child: Column(
-          children: [
-            buildHeader(context),
-            buildMenuSection(context),
-          ],
+          children: [buildHeader(context), buildMenuSection(context)],
         ),
       ),
       bottomNavigationBar: buildBottomNavigationBar(),
@@ -57,17 +55,16 @@ class _HomePageState extends State<HomePage> {
             // Tampilkan pesan jika kamera tidak tersedia.
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
-                content: Text('Kamera tidak tersedia. Mohon periksa izin atau perangkat.'),
+                content: Text(
+                  'Kamera tidak tersedia. Mohon periksa izin atau perangkat.',
+                ),
               ),
             );
           }
         },
         backgroundColor: AppColors.oliveGreen,
         shape: const CircleBorder(
-          side: BorderSide(
-            color: AppColors.darkOliveGreen,
-            width: 1,
-          ),
+          side: BorderSide(color: AppColors.darkOliveGreen, width: 1),
         ),
         child: const Icon(
           Icons.camera_alt_outlined,
@@ -87,9 +84,7 @@ class _HomePageState extends State<HomePage> {
           height: 200,
           decoration: BoxDecoration(
             image: DecorationImage(
-              image: AssetImage(
-                'assets/images/bg_home.jpg',
-              ),
+              image: AssetImage('assets/images/bg_home.jpg'),
               fit: BoxFit.cover,
             ),
           ),
@@ -102,14 +97,14 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 5,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.darkOliveGreen.withAlpha(204),
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(
-                    color: Colors.white,
-                    width: 2,
-                  ),
+                  border: Border.all(color: Colors.white, width: 2),
                 ),
                 child: const Row(
                   children: [
@@ -145,8 +140,13 @@ class _HomePageState extends State<HomePage> {
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: CircleAvatar(
-                        backgroundColor: AppColors.darkOliveGreen.withAlpha(204),
-                        child: const Icon(Icons.notifications, color: Colors.white),
+                        backgroundColor: AppColors.darkOliveGreen.withAlpha(
+                          204,
+                        ),
+                        child: const Icon(
+                          Icons.notifications,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   ),
@@ -167,7 +167,9 @@ class _HomePageState extends State<HomePage> {
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: CircleAvatar(
-                        backgroundColor: AppColors.darkOliveGreen.withAlpha(204),
+                        backgroundColor: AppColors.darkOliveGreen.withAlpha(
+                          204,
+                        ),
                         child: const Icon(Icons.person, color: Colors.white),
                       ),
                     ),
@@ -186,7 +188,9 @@ class _HomePageState extends State<HomePage> {
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
             decoration: BoxDecoration(
               color: AppColors.whiteSmoke,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(30)),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(30),
+              ),
             ),
             child: Row(
               children: [
@@ -242,18 +246,22 @@ class _HomePageState extends State<HomePage> {
                 subtitle: 'Scan sampah untuk mendapatkan detail lebih lanjut',
                 onTap: () {
                   // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
-                  if (_availableCameras != null && _availableCameras!.isNotEmpty) {
+                  if (_availableCameras != null &&
+                      _availableCameras!.isNotEmpty) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
                         // Meneruskan _availableCameras ke ScanCamera.
-                        builder: (context) => ScanCamera(cameras: _availableCameras!),
+                        builder: (context) =>
+                            ScanCamera(cameras: _availableCameras!),
                       ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Kamera tidak tersedia. Mohon periksa izin atau perangkat.'),
+                        content: Text(
+                          'Kamera tidak tersedia. Mohon periksa izin atau perangkat.',
+                        ),
                       ),
                     );
                   }
@@ -296,7 +304,14 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.hourglass_bottom_outlined,
                 title: 'Trash Capsule',
                 subtitle: 'Ketahui dampak dari tindakan penanganan sampah',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => TrashCapsulePage(cameras: widget.cameras),
+                    ),
+                  );
+                },
                 gradient: const LinearGradient(
                   colors: [
                     Color(0xFFA2C96C),
@@ -377,10 +392,7 @@ class _HomePageState extends State<HomePage> {
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-            border: Border.all(
-              color: AppColors.darkMossGreen,
-              width: 1,
-            ),
+            border: Border.all(color: AppColors.darkMossGreen, width: 1),
             borderRadius: BorderRadius.circular(20),
             boxShadow: [
               BoxShadow(
@@ -452,10 +464,7 @@ class _HomePageState extends State<HomePage> {
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
               ),
-          border: Border.all(
-            color: AppColors.darkMossGreen,
-            width: 1,
-          ),
+          border: Border.all(color: AppColors.darkMossGreen, width: 1),
           borderRadius: BorderRadius.circular(20),
           boxShadow: [
             BoxShadow(

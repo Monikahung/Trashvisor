@@ -109,17 +109,28 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
     return Scaffold(
       appBar: AppBar(
         toolbarHeight: 80,
-        backgroundColor: const Color(0xFF678E35),
+        backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
           children: [
-            CircleAvatar(
-              backgroundColor: Colors.white,
-              child: Image.asset('assets/images/icon_chatbot.png'),
+            Container(
+              width: 48,
+              height: 48,
+              decoration: BoxDecoration(
+                color: AppColors.fernGreen,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(
+                  color: AppColors.whiteSmoke,
+                  width: 1,
+                ),
+              ),
+              child: const Center(
+                child: Icon(Icons.chat_outlined, color: AppColors.whiteSmoke),
+              ),
             ),
             const SizedBox(width: 10),
             Column(
@@ -187,9 +198,18 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
           if (!isUser)
             Padding(
               padding: const EdgeInsets.only(right: 8),
-              child: CircleAvatar(
-                backgroundColor: Colors.white,
-                child: Image.asset('assets/images/icon_chatbot.png'),
+              child: Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(
+                    color: AppColors.white, // Warna border yang Anda inginkan
+                    width: 2.0, // Ketebalan border
+                  ),
+                ),
+                child: CircleAvatar(
+                  backgroundColor: AppColors.fernGreen,
+                  child: Icon(Icons.chat_outlined, color: AppColors.whiteSmoke),
+                ),
               ),
             ),
           SizedBox(
