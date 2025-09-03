@@ -66,6 +66,8 @@ class OnboardingTemplate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Size size = MediaQuery.of(context).size;
+    // Safe area top (status bar / notch) - digunakan untuk perhitungan posisi absolute
+    final double safeTop = MediaQuery.of(context).padding.top;
 
     // ============================================================
     //  TITIK UBAHAN / KNOB JARAK (semua angka disentralisasi di sini)
@@ -80,7 +82,7 @@ class OnboardingTemplate extends StatelessWidget {
     // NEGATIF = naik; POSITIF = turun.
     const double contentPullUpY = -40.0;
 
-    // (NEW) Offset khusus untuk TOMBOL "LEWATI" agar tidak terlalu mepet notch.
+    // Offset khusus untuk TOMBOL "LEWATI" agar tidak terlalu mepet notch.
     // POSITIF = dorong turun (mengimbangi contentPullUpY yang negatif).
     const double skipPullDownY = 48.0;
 
@@ -128,6 +130,14 @@ class OnboardingTemplate extends StatelessWidget {
       );
     }
 
+    // Hit position untuk tombol Lewati:
+    // Kita hitung top absolute sehingga visual & hitbox pasti sejajar.
+    // Rumus: safeTop (statusbar) + (offset visual yang kita inginkan)
+    // Karena `contentPullUpY` mengangkat seluruh konten, jika kamu ingin
+    // tombol mengikuti pergeseran itu plus penyesuaian skipPullDownY,
+    // maka gunakan kombinasi contentPullUpY + skipPullDownY.
+    final double skipTop = safeTop + (0 /*base*/ + contentPullUpY + skipPullDownY);
+
     return Scaffold(
       body: Container(
         // Latar belakang full-screen (gambar), supaya konsisten tiap slide.
@@ -137,126 +147,139 @@ class OnboardingTemplate extends StatelessWidget {
             fit: BoxFit.fill, // TITIK UBAHAN: ganti ke cover/contain bila perlu
           ),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: sidePadding),
-            // NOTE: Seluruh konten digeser naik/turun sekali di sini.
-            child: Transform.translate(
-              offset: const Offset(0, contentPullUpY),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // -----------------------
-                  // TOMBOL "LEWATI" (SKIP)
-                  // -----------------------
-                  // (NEW) Didorong TURUN agar tidak terlalu mepet ke tepi atas
-                  // meskipun seluruh konten sedang "diangkat" oleh contentPullUpY.
-                  Transform.translate(
-                    offset: const Offset(0, skipPullDownY),
-                    child: Align(
-                      alignment: Alignment.centerRight,
-                      child: TextButton(
-                        onPressed: onSkip, // delegasi ke parent
-                        child: const Text(
-                          'Lewati',
-                          style: TextStyle(
-                            color: brandDeepGreen,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 14,
-                            // NOTE: family custom tidak wajib; pastikan font tersedia
-                            fontFamily: 'assets/fonts/nunito/nunito-bold.ttf',
+        // Gunakan Stack: child pertama adalah konten (yang bisa di-transform),
+        // child kedua adalah tombol Lewati yang diposisikan absolut (Positioned).
+        child: Stack(
+          children: [
+            // --------------------------
+            // Konten utama (masih transformable)
+            // --------------------------
+            SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: sidePadding),
+                child: Transform.translate(
+                  offset: const Offset(0, contentPullUpY),
+                  transformHitTests:
+                      true, // agar hit-tests di dalam mengikuti transform (umumnya safe)
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // NOTE: kita tidak lagi memasukkan tombol "Lewati" di sini.
+                      // Biarkan tempat untuk jarak atas supaya layout tetap konsisten.
+                      const SizedBox(height: 56), // cadangan ruang atas (visual)
+                      const SizedBox(height: 0),
+                      const SizedBox(height: 16),
+
+                      // ILUSTRASI UTAMA
+                      Expanded(
+                        flex: 5,
+                        child: Padding(
+                          padding: const EdgeInsets.only(bottom: 0.0),
+                          child: Image.asset(
+                            illustrationAsset,
+                            fit: BoxFit.contain,
+                            // TIP Pengukuran: kontrol lebar di sini kalau ingin
+                            // ilustrasi terasa “ringan/compact”.
+                            width: size.width * imageWidthRatio,
                           ),
                         ),
                       ),
-                    ),
-                  ),
 
-                  const SizedBox(height: 16),
-
-                  // -----------------------
-                  // ILUSTRASI UTAMA
-                  // -----------------------
-                  Expanded(
-                    flex: 5,
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 0.0),
-                      child: Image.asset(
-                        illustrationAsset,
-                        fit: BoxFit.contain,
-                        // TIP Pengukuran: kontrol lebar di sini kalau ingin
-                        // ilustrasi terasa “ringan/compact”.
-                        width: size.width * imageWidthRatio,
+                      // DOTS INDIKATOR
+                      const SizedBox(height: gapImageToDots),
+                      Transform.translate(
+                        // NEGATIF = naik (aman, karena ini transform – bukan ukuran)
+                        offset: const Offset(0, dotsPullUpY),
+                        transformHitTests:
+                            true, // optional: jika kamu juga ingin dots hit-test berubah
+                        child: dots(indicatorIndex, indicatorCount),
                       ),
-                    ),
-                  ),
 
-                  // -----------------------
-                  // DOTS INDIKATOR
-                  // -----------------------
-                  const SizedBox(height: gapImageToDots),
-                  Transform.translate(
-                    // NEGATIF = naik (aman, karena ini transform – bukan ukuran)
-                    offset: const Offset(0, dotsPullUpY),
-                    child: dots(indicatorIndex, indicatorCount),
-                  ),
+                      const SizedBox(height: gapDotsToTitle),
 
-                  const SizedBox(height: gapDotsToTitle),
-
-                  // -----------------------
-                  // JUDUL
-                  // -----------------------
-                  Text(
-                    title,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: brandDeepGreen,
-                      fontFamily: 'assets/fonts/nunito/nunito-extrabold.ttf',
-                    ),
-                  ),
-
-                  const SizedBox(height: gapTitleToDesc),
-
-                  // -----------------------
-                  // DESKRIPSI
-                  // -----------------------
-                  Text(
-                    description,
-                    textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                      color: Colors.black87,
-                      height: 1.5, // line-height agar lebih nyaman dibaca
-                      fontFamily: 'assets/fonts/roboto/roboto-regular.ttf',
-                    ),
-                  ),
-
-                  const SizedBox(height: descToButton),
-
-                  // -----------------------
-                  // TOMBOL "NEXT"
-                  // -----------------------
-                  Align(
-                    alignment: Alignment.center,
-                    child: InkWell(
-                      onTap: onNext, // delegasi ke parent (pindah slide)
-                      borderRadius: BorderRadius.circular(40),
-                      child: SizedBox(
-                        width: 64,
-                        height: 64,
-                        // TIP: jika nanti ingin pakai IconButton, cukup ganti di sini
-                        child: Image.asset(nextButtonAsset, fit: BoxFit.contain),
+                      // JUDUL
+                      Text(
+                        title,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: brandDeepGreen,
+                          fontFamily: 'assets/fonts/nunito/nunito-extrabold.ttf',
+                        ),
                       ),
-                    ),
-                  ),
 
-                  const SizedBox(height: 16),
-                ],
+                      const SizedBox(height: gapTitleToDesc),
+
+                      // DESKRIPSI
+                      Text(
+                        description,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w400,
+                          color: Colors.black87,
+                          height: 1.5, // line-height agar lebih nyaman dibaca
+                          fontFamily: 'assets/fonts/roboto/roboto-regular.ttf',
+                        ),
+                      ),
+
+                      const SizedBox(height: descToButton),
+
+                      // TOMBOL "NEXT"
+                      Align(
+                        alignment: Alignment.center,
+                        child: InkWell(
+                          onTap: onNext, // delegasi ke parent (pindah slide)
+                          borderRadius: BorderRadius.circular(40),
+                          child: SizedBox(
+                            width: 64,
+                            height: 64,
+                            // TIP: jika nanti ingin pakai IconButton, cukup ganti di sini
+                            child:
+                                Image.asset(nextButtonAsset, fit: BoxFit.contain),
+                          ),
+                        ),
+                      ),
+
+                      const SizedBox(height: 16),
+                    ],
+                  ),
+                ),
               ),
             ),
-          ),
+
+            // --------------------------
+            // Tombol "Lewati" — diposisikan absolut.
+            // Dengan Positioned menggunakan 'skipTop' di atas, visual dan hitbox
+            // persis sejajar.
+            // --------------------------
+            Positioned(
+              top: skipTop,
+              right: sidePadding,
+              child: GestureDetector(
+                behavior: HitTestBehavior.translucent,
+                onTap: () {
+                  // debug print; hapus saat rilis.
+                  // ignore: avoid_print
+                  print('Lewati ditekan (absolute Positioned)');
+                  onSkip();
+                },
+                child: const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 8.0, vertical: 8.0),
+                  child: Text(
+                    'Lewati',
+                    style: TextStyle(
+                      color: brandDeepGreen,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 14,
+                      fontFamily: 'assets/fonts/nunito/nunito-bold.ttf',
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );
