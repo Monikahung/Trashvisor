@@ -6,7 +6,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:trashvisor/core/colors.dart';
 
 class TrashChatbotPage extends StatefulWidget {
-  const TrashChatbotPage({super.key});
+  // Parameter untuk pertanyaan awal
+  final String? initialQuestion;
+
+  const TrashChatbotPage({super.key, this.initialQuestion});
 
   @override
   State<TrashChatbotPage> createState() => _TrashChatbotPageState();
@@ -31,23 +34,32 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
   @override
   void initState() {
     super.initState();
+    // Tampilkan pesan sambutan dari AI
     _messages.add({
       'role': 'ai',
       'content':
           'Halo! 👋 Saya adalah asisten AI yang siap membantu Anda mengenal lebih jauh tentang pengelolaan sampah, mulai dari cara memilah hingga tips daur ulang. Yuk, bersama kita jaga lingkungan demi masa depan yang lebih bersih dan sehat! 🌱',
     });
+
+    // Periksa jika ada pertanyaan awal
+    if (widget.initialQuestion != null && widget.initialQuestion!.isNotEmpty) {
+      Future.microtask(() => _sendInitialMessage(widget.initialQuestion!));
+    }
   }
 
-  Future<void> _sendMessage() async {
-    if (_controller.text.isEmpty) return;
-
-    final userMessage = _controller.text;
+  // (NEW) Fungsi khusus untuk mengirim pesan pertama kali
+  Future<void> _sendInitialMessage(String message) async {
+    _suggestionsVisible = false; // Sembunyikan saran cepat
     setState(() {
-      _messages.add({'role': 'user', 'content': userMessage});
+      _messages.add({'role': 'user', 'content': message});
       _messages.add({'role': 'ai', 'content': 'Menunggu jawaban...'});
     });
-    _controller.clear();
 
+    await _callApi(message);
+  }
+
+  // (NEW) Pisahkan logika pemanggilan API ke fungsi terpisah
+  Future<void> _callApi(String userMessage) async {
     final apiKey = dotenv.env['OPENAI_API_KEY'];
     if (apiKey == null || apiKey.isEmpty) {
       setState(() {
@@ -109,6 +121,19 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
     }
   }
 
+  Future<void> _sendMessage() async {
+    if (_controller.text.isEmpty) return;
+
+    final userMessage = _controller.text;
+    setState(() {
+      _messages.add({'role': 'user', 'content': userMessage});
+      _messages.add({'role': 'ai', 'content': 'Menunggu jawaban...'});
+    });
+    _controller.clear();
+
+    await _callApi(userMessage);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -117,7 +142,10 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
         backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
+          icon: const Icon(
+            Icons.arrow_back_ios_new,
+            color: AppColors.whiteSmoke,
+          ),
           onPressed: () => Navigator.pop(context),
         ),
         title: Row(
@@ -128,10 +156,7 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
               decoration: BoxDecoration(
                 color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: AppColors.whiteSmoke,
-                  width: 1,
-                ),
+                border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
               child: const Center(
                 child: Icon(Icons.chat_outlined, color: AppColors.whiteSmoke),
