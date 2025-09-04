@@ -17,7 +17,7 @@ Aplikasi ini dikembangkan dalam rangka mendukung gaya hidup ramah lingkungan dan
 ## 🚀 Instalasi & Menjalankan Aplikasi
 
 - **Clone repositori**
-git clone https://github.com/username/trashvisor.git
+git clone https://github.com/Monikahung/Trashvisor.git
 cd trashvisor
 - **Install dependencies**
 flutter pub get
