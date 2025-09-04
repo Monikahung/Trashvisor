@@ -16,14 +16,14 @@ Aplikasi ini dikembangkan dalam rangka mendukung gaya hidup ramah lingkungan dan
 
 ## 🚀 Instalasi & Menjalankan Aplikasi
 
-**1. Clone repositori**
+- **Clone repositori**
 git clone https://github.com/username/trashvisor.git
 cd trashvisor
-**2. Install dependencies**
+- **Install dependencies**
 flutter pub get
-**3. Jalankan aplikasi**
+- **Jalankan aplikasi**
 flutter run
-**Note: Sedang proses pengembangan. Apabila sudah selesai, maka akan ada file apk yang bisa langsung diinstall di ponsel Android**
+- **Note: Sedang proses pengembangan. Apabila sudah selesai, maka akan ada file apk yang bisa langsung diinstall di ponsel Android**
 
 ---
 
