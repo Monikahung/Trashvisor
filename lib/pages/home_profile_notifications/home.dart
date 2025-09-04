@@ -6,6 +6,7 @@ import 'notifications.dart';
 import '../trashvision/scan_camera.dart';
 import '../trashchatbot/chatbot.dart';
 import '../trashcapsule/capsule.dart';
+import '../trashlocation/location_page.dart';
 
 // HomePage diubah menjadi StatefulWidget
 class HomePage extends StatefulWidget {
@@ -282,7 +283,12 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.location_on_outlined,
                 title: 'Trash Location',
                 subtitle: 'Temukan tempat pembuangan sampah terdekat',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const LocationPage()),
+                  );
+                },
                 gradient: const LinearGradient(
                   colors: [
                     Color(0xFF205304),
@@ -308,7 +314,8 @@ class _HomePageState extends State<HomePage> {
                   Navigator.push(
                     context,
                     MaterialPageRoute(
-                      builder: (context) => TrashCapsulePage(cameras: widget.cameras),
+                      builder: (context) =>
+                          TrashCapsulePage(cameras: widget.cameras),
                     ),
                   );
                 },
