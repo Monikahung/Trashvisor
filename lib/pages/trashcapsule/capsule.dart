@@ -5,9 +5,9 @@ import 'true_capsule.dart';
 import 'false_capsule.dart';
 import 'package:camera/camera.dart';
 
-// Widget untuk bilah pencarian
 class _SearchBarSection extends StatelessWidget {
-  const _SearchBarSection();
+  final TextEditingController controller;
+  const _SearchBarSection({required this.controller});
 
   @override
   Widget build(BuildContext context) {
@@ -19,8 +19,9 @@ class _SearchBarSection extends StatelessWidget {
           borderRadius: BorderRadius.circular(25),
           border: Border.all(color: AppColors.fernGreen, width: 1),
         ),
-        child: const TextField(
-          decoration: InputDecoration(
+        child: TextField(
+          controller: controller, // <<<<<<<<<<<<<< penting: pertahankan teks
+          decoration: const InputDecoration(
             hintText: 'Telusuri Jenis Sampah',
             hintStyle: TextStyle(
               fontSize: 14,
@@ -29,13 +30,15 @@ class _SearchBarSection extends StatelessWidget {
             ),
             prefixIcon: Icon(Icons.search, color: AppColors.fernGreen),
             contentPadding: EdgeInsets.symmetric(vertical: 16),
-            border: InputBorder.none, // Menghilangkan border default
+            border: InputBorder.none,
           ),
-          style: TextStyle(
+          style: const TextStyle(
             fontSize: 14,
             color: Colors.black,
             fontFamily: 'Roboto',
           ),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) {}, // sesuai requirement: tetap di halaman ini
         ),
       ),
     );
@@ -45,8 +48,11 @@ class _SearchBarSection extends StatelessWidget {
 /// Bagian tombol pilihan (Penanganan Baik & Buruk)
 class _ActionButtonsSection extends StatelessWidget {
   final List<CameraDescription> cameras;
-
-  const _ActionButtonsSection({required this.cameras});
+  final TextEditingController controller;
+  const _ActionButtonsSection({
+    required this.cameras,
+    required this.controller,
+  });
 
   Widget _buildActionButton({
     required IconData icon,
@@ -67,13 +73,11 @@ class _ActionButtonsSection extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(icon, color: AppColors.whiteSmoke, size: 32),
-                const Icon(
-                  Icons.arrow_drop_down,
-                  color: AppColors.whiteSmoke,
-                  size: 32,
-                ),
+              children: const [
+                Icon(Icons.check_circle_outline,
+                    color: AppColors.whiteSmoke, size: 32),
+                Icon(Icons.arrow_drop_down,
+                    color: AppColors.whiteSmoke, size: 32),
               ],
             ),
             const SizedBox(height: 16),
@@ -94,6 +98,7 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final waste = controller.text.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
@@ -107,7 +112,10 @@ class _ActionButtonsSection extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TrueTrashCapsule(cameras: cameras),
+                    builder: (context) => TrueTrashCapsule(
+                      cameras: cameras,
+                      initialWasteType: waste, // << pass teks
+                    ),
                   ),
                 );
               },
@@ -123,7 +131,10 @@ class _ActionButtonsSection extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => FalseTrashCapsule(cameras: cameras),
+                    builder: (context) => FalseTrashCapsule(
+                      cameras: cameras,
+                      initialWasteType: waste, // << pass teks
+                    ),
                   ),
                 );
               },
@@ -135,7 +146,7 @@ class _ActionButtonsSection extends StatelessWidget {
   }
 }
 
-/// Bagian kartu dampak
+/// Bagian kartu dampak (tetap sama—placeholder)
 class _ImpactCardSection extends StatelessWidget {
   const _ImpactCardSection();
 
@@ -181,10 +192,22 @@ class _ImpactCardSection extends StatelessWidget {
 }
 
 /// Halaman utama Trash Capsule
-class TrashCapsulePage extends StatelessWidget {
+class TrashCapsulePage extends StatefulWidget {
   final List<CameraDescription> cameras;
-
   const TrashCapsulePage({super.key, required this.cameras});
+
+  @override
+  State<TrashCapsulePage> createState() => _TrashCapsulePageState();
+}
+
+class _TrashCapsulePageState extends State<TrashCapsulePage> {
+  final _searchC = TextEditingController();
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -195,16 +218,11 @@ class TrashCapsulePage extends StatelessWidget {
         backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(
-            Icons.arrow_back_ios_new,
-            color: AppColors.whiteSmoke,
-          ),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(cameras: cameras),
-              ),
+              MaterialPageRoute(builder: (context) => HomePage(cameras: widget.cameras)),
             );
           },
         ),
@@ -219,10 +237,7 @@ class TrashCapsulePage extends StatelessWidget {
                 border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
               child: const Center(
-                child: Icon(
-                  Icons.card_giftcard_outlined,
-                  color: AppColors.whiteSmoke,
-                ),
+                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
               ),
             ),
             const SizedBox(width: 10),
@@ -233,10 +248,7 @@ class TrashCapsulePage extends StatelessWidget {
                   const Text(
                     'Trash Capsule',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Nunito',
+                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Nunito',
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -244,8 +256,7 @@ class TrashCapsulePage extends StatelessWidget {
                     'Simulasi dampak pengelolaan sampah',
                     style: TextStyle(
                       color: Colors.white.withAlpha((255 * 0.8).round()),
-                      fontSize: 12,
-                      fontFamily: 'Roboto',
+                      fontSize: 12, fontFamily: 'Roboto',
                     ),
                   ),
                 ],
@@ -259,72 +270,57 @@ class TrashCapsulePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
-              SizedBox(height: 30),
-              _SearchBarSection(),
-              SizedBox(height: 24),
-              Padding(
+              const SizedBox(height: 30),
+              _SearchBarSection(controller: _searchC),
+              const SizedBox(height: 24),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Pilih Tindak Penanganan',
                   style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
+                    fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen,
                   ),
                 ),
               ),
-              SizedBox(height: 8),
-              Padding(
+              const SizedBox(height: 8),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Tentukan tindakan penanganan sampah yang akan kamu lakukan.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto'),
                 ),
               ),
-              SizedBox(height: 24),
-              _ActionButtonsSection(cameras: cameras),
-              SizedBox(height: 24),
+              const SizedBox(height: 24),
+              _ActionButtonsSection(cameras: widget.cameras, controller: _searchC),
+              const SizedBox(height: 24),
               Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Container(
-                  height: 1,
-                  width: double.infinity,
+                  height: 1, width: double.infinity,
                   color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                 ),
               ),
-              SizedBox(height: 24),
-              Padding(
+              const SizedBox(height: 24),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Dampak di Masa Depan',
                   style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
+                    fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen,
                   ),
                 ),
               ),
-              SizedBox(height: 8),
-              Padding(
+              const SizedBox(height: 8),
+              const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Tindakan yang kamu lakukan akan menentukan masa depan bumi.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto'),
                 ),
               ),
-              SizedBox(height: 24),
-              _ImpactCardSection(),
-              SizedBox(height: 30),
+              const SizedBox(height: 24),
+              const _ImpactCardSection(),
+              const SizedBox(height: 30),
             ],
           ),
         ),

@@ -5,9 +5,83 @@ import 'false_capsule.dart';
 import 'capsule.dart';
 import 'package:camera/camera.dart';
 
-// Widget untuk bilah pencarian
+import 'capsule_models.dart';
+import 'capsule_service.dart';
+
+// ---- KARTU ----
+class _ImpactCard extends StatelessWidget {
+  final String title;
+  final String description;
+  final String? imageUrl;
+  final String? fallbackAsset;
+
+  const _ImpactCard({
+    required this.title,
+    required this.description,
+    this.imageUrl,
+    this.fallbackAsset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    Widget image;
+    if (imageUrl != null && imageUrl!.isNotEmpty) {
+      image = Image.network(
+        imageUrl!,
+        width: 90, height: 110, fit: BoxFit.cover,
+        errorBuilder: (_, __, ___) => _fallback(),
+      );
+    } else {
+      image = _fallback();
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.fernGreen, width: 1),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(borderRadius: BorderRadius.circular(10), child: image),
+          const SizedBox(width: 16),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title,
+                    style: const TextStyle(
+                      fontSize: 18, fontWeight: FontWeight.bold,
+                      color: AppColors.darkMossGreen, fontFamily: 'Nunito',
+                    )),
+                const SizedBox(height: 4),
+                Text(description,
+                    style: const TextStyle(
+                      fontSize: 14, color: Colors.black, fontFamily: 'Roboto',
+                    )),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _fallback() {
+    return Image.asset(
+      fallbackAsset ?? 'assets/images/true_capsule.png',
+      width: 90, height: 110, fit: BoxFit.cover,
+    );
+  }
+}
+
+// ---- SEARCH BAR ----
 class _SearchBarSection extends StatelessWidget {
-  const _SearchBarSection();
+  final TextEditingController controller;
+  final VoidCallback onSubmit;
+  const _SearchBarSection({required this.controller, required this.onSubmit});
 
   @override
   Widget build(BuildContext context) {
@@ -15,46 +89,35 @@ class _SearchBarSection extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(25),
-          border: Border.all(
-            color: AppColors.fernGreen,
-            width: 1,
-          ),
+          color: Colors.white, borderRadius: BorderRadius.circular(25),
+          border: Border.all(color: AppColors.fernGreen, width: 1),
         ),
-        child: const TextField(
-          decoration: InputDecoration(
+        child: TextField(
+          controller: controller,
+          decoration: const InputDecoration(
             hintText: 'Telusuri Jenis Sampah',
-            hintStyle: TextStyle(
-              fontSize: 14,
-              color: AppColors.fernGreen,
-              fontFamily: 'Roboto',
-            ),
-            prefixIcon: Icon(
-              Icons.search,
-              color: AppColors.fernGreen,
-            ),
+            hintStyle: TextStyle(fontSize: 14, color: AppColors.fernGreen, fontFamily: 'Roboto'),
+            prefixIcon: Icon(Icons.search, color: AppColors.fernGreen),
             contentPadding: EdgeInsets.symmetric(vertical: 16),
-            border: InputBorder.none, // Menghilangkan border default
+            border: InputBorder.none,
           ),
-          style: TextStyle(
-            fontSize: 14,
-            color: Colors.black,
-            fontFamily: 'Roboto',
-          ),
+          style: const TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto'),
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => onSubmit(), // regenerate
         ),
       ),
     );
   }
 }
 
-/// Bagian tombol pilihan (Penanganan Baik & Buruk)
+// ---- ACTION BUTTONS ----
 class _ActionButtonsSection extends StatelessWidget {
   final List<CameraDescription> cameras;
+  final String currentWaste;
 
-  const _ActionButtonsSection({required this.cameras});
+  const _ActionButtonsSection({required this.cameras, required this.currentWaste});
 
-  Widget _buildActionButton({
+  Widget _build({
     required IconData icon,
     required String label,
     required Color color,
@@ -65,30 +128,20 @@ class _ActionButtonsSection extends StatelessWidget {
       onTap: onTap,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-        decoration: BoxDecoration(
-          color: color,
-          borderRadius: BorderRadius.circular(16),
-        ),
+        decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(16)),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Icon(icon, color: AppColors.whiteSmoke, size: 32),
-                Icon(arrowIcon, color: AppColors.whiteSmoke, size: 32),
-              ],
-            ),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              Icon(icon, color: AppColors.whiteSmoke, size: 32),
+              Icon(arrowIcon, color: AppColors.whiteSmoke, size: 32),
+            ]),
             const SizedBox(height: 16),
-            Text(
-              label,
-              style: const TextStyle(
-                fontSize: 16,
-                color: AppColors.whiteSmoke,
-                fontWeight: FontWeight.bold,
-                fontFamily: 'Nunito',
-              ),
-            ),
+            Text(label,
+                style: const TextStyle(
+                  fontSize: 16, color: AppColors.whiteSmoke,
+                  fontWeight: FontWeight.bold, fontFamily: 'Nunito',
+                )),
           ],
         ),
       ),
@@ -102,24 +155,23 @@ class _ActionButtonsSection extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _buildActionButton(
+            child: _build(
               icon: Icons.check_circle_outline,
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
               arrowIcon: Icons.arrow_drop_up,
               onTap: () {
+                // balik ke halaman pilih (capsule) — sesuai behaviour awalmu
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => TrashCapsulePage(cameras: cameras),
-                  ),
+                  MaterialPageRoute(builder: (_) => TrashCapsulePage(cameras: cameras)),
                 );
               },
             ),
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: _buildActionButton(
+            child: _build(
               icon: Icons.not_interested,
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,
@@ -128,7 +180,9 @@ class _ActionButtonsSection extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => FalseTrashCapsule(cameras: cameras),
+                    builder: (_) => FalseTrashCapsule(
+                      cameras: cameras, initialWasteType: currentWaste,
+                    ),
                   ),
                 );
               },
@@ -140,131 +194,45 @@ class _ActionButtonsSection extends StatelessWidget {
   }
 }
 
-// Widget tunggal untuk kartu dampak
-class _ImpactCard extends StatelessWidget {
-  final String title;
-  final String description;
-  final String imagePath;
-
-  const _ImpactCard({
-    required this.title,
-    required this.description,
-    required this.imagePath,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: AppColors.fernGreen,
-          width: 1,
-        ),
-      ),
-      child: Row(
-        children: [
-          // Menggunakan ClipRRect untuk gambar dengan sudut membulat
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Image.asset(
-              imagePath,
-              width: 90,
-              height: 110,
-              fit: BoxFit.cover,
-            ),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  title,
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                    fontFamily: 'Nunito',
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  description,
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// Widget untuk menampilkan daftar kartu dampak
-class _ImpactCardsList extends StatelessWidget {
-  const _ImpactCardsList();
-
-  @override
-  Widget build(BuildContext context) {
-    // Daftar data untuk setiap kartu dampak
-    final List<Map<String, String>> impacts = [
-      {
-        'title': 'Lingkungan Sehat',
-        'description': 'Sungai, laut, dan tanah tetap bersih serta ekosistem alam terlindungi dengan baik.',
-        'image': 'assets/images/true_capsule.png',
-      },
-      {
-        'title': 'Udara Bersih',
-        'description': 'Polusi menjadi berkurang karena sampah tidak lagi dibakar secara sembarangan.',
-        'image': 'assets/images/true_capsule_2.png',
-      },
-      {
-        'title': 'Sumber Terjaga',
-        'description': 'Pemilahan dan daur ulang sampah dapat melestarikan sumber daya alam.',
-        'image': 'assets/images/true_capsule_3.png',
-      },
-      {
-        'title': 'Ekonomi Tumbuh',
-        'description': 'Sampah yang dikelola dengan baik bisa membuka peluang ekonomi baru.',
-        'image': 'assets/images/true_capsule_4.png',
-      },
-      {
-        'title': 'Generasi Sehat',
-        'description': 'Lingkungan sehat menjaga bumi tetap layak huni bagi anak cucu di masa depan.',
-        'image': 'assets/images/true_capsule_5.png',
-      },
-    ];
-
-    // Menampilkan daftar kartu dampak
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
-      child: Column(
-        children: impacts.map((impact) {
-          return _ImpactCard(
-            title: impact['title']!,
-            description: impact['description']!,
-            imagePath: impact['image']!,
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-/// Halaman utama Trash Capsule
-class TrueTrashCapsule extends StatelessWidget {
+// ---- PAGE ----
+class TrueTrashCapsule extends StatefulWidget {
   final List<CameraDescription> cameras;
+  final String? initialWasteType; // supaya teks search tetap kebawa
 
-  const TrueTrashCapsule({super.key, required this.cameras});
+  const TrueTrashCapsule({super.key, required this.cameras, this.initialWasteType});
+
+  @override
+  State<TrueTrashCapsule> createState() => _TrueTrashCapsuleState();
+}
+
+class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
+  final _svc = CapsuleService();
+  late final TextEditingController _searchC;
+
+  Future<CapsuleResult>? _future;
+
+  @override
+  void initState() {
+    super.initState();
+    _searchC = TextEditingController(text: widget.initialWasteType ?? '');
+    _triggerGenerate();
+  }
+
+  void _triggerGenerate() {
+    final waste = _searchC.text.trim();
+    setState(() {
+      _future = _svc.generate(
+        wasteType: waste.isEmpty ? 'sampah plastik' : waste,
+        scenario: CapsuleScenario.good,
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _searchC.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -277,133 +245,102 @@ class TrueTrashCapsule extends StatelessWidget {
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(cameras: cameras),
-              ),
-            );
+            Navigator.push(context, MaterialPageRoute(builder: (_) => HomePage(cameras: widget.cameras)));
           },
         ),
         title: Row(
           children: [
             Container(
-              width: 48,
-              height: 48,
+              width: 48, height: 48,
               decoration: BoxDecoration(
                 color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(
-                  color: AppColors.whiteSmoke,
-                  width: 1,
-                ),
+                border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
-              child: const Center(
-                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
-              ),
+              child: const Center(child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke)),
             ),
             const SizedBox(width: 10),
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text(
-                    'Trash Capsule',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Nunito',
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    'Simulasi dampak pengelolaan sampah',
-                    style: TextStyle(
-                      color: Colors.white.withAlpha((255 * 0.8).round()),
-                      fontSize: 12,
-                      fontFamily: 'Roboto',
-                    ),
-                  ),
-                ],
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Text('Trash Capsule',
+                    style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Nunito')),
+                const SizedBox(height: 4),
+                Text('Simulasi dampak pengelolaan sampah',
+                    style: TextStyle(color: Colors.white.withAlpha((255 * 0.8).round()),
+                        fontSize: 12, fontFamily: 'Roboto')),
+              ]),
             ),
           ],
         ),
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              SizedBox(height: 30),
-              _SearchBarSection(),
-              SizedBox(height: 24),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Pilih Tindak Penanganan',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                  ),
-                ),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: <Widget>[
+            const SizedBox(height: 30),
+            _SearchBarSection(controller: _searchC, onSubmit: _triggerGenerate),
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text('Pilih Tindak Penanganan',
+                  style: TextStyle(fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen)),
+            ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text('Tentukan tindakan penanganan sampah yang akan kamu lakukan.',
+                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto')),
+            ),
+            const SizedBox(height: 24),
+            _ActionButtonsSection(cameras: widget.cameras, currentWaste: _searchC.text.trim()),
+            const SizedBox(height: 24),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Container(
+                height: 1, width: double.infinity,
+                color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
               ),
-              SizedBox(height: 8),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Tentukan tindakan penanganan sampah yang akan kamu lakukan.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
+            ),
+            const SizedBox(height: 24),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text('Dampak di Masa Depan',
+                  style: TextStyle(fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen)),
+            ),
+            const SizedBox(height: 8),
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text('Penanganan sampah yang benar akan menjaga kelestarian bumi di masa depan.',
+                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto')),
+            ),
+            const SizedBox(height: 24),
+
+            // ---------- HASIL ----------
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: FutureBuilder<CapsuleResult>(
+                future: _future,
+                builder: (context, snap) {
+                  if (snap.connectionState == ConnectionState.waiting) {
+                    return const Center(child: Padding(
+                      padding: EdgeInsets.symmetric(vertical: 24), child: CircularProgressIndicator()));
+                  }
+                  if (!snap.hasData || snap.data == null) {
+                    return const Text('Gagal memuat data.', style: TextStyle(fontFamily: 'Roboto'));
+                  }
+                  final items = snap.data!.items; // List<CapsuleItem>
+                  return Column(
+                    children: items.map((it) => _ImpactCard(
+                      title: it.title,
+                      description: it.description,
+                      imageUrl: it.imageUrl,
+                      fallbackAsset: it.fallbackAsset,
+                    )).toList(),
+                  );
+                },
               ),
-              SizedBox(height: 24),
-              _ActionButtonsSection(cameras: cameras),
-              SizedBox(height: 24),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Container(
-                  height: 1,
-                  width: double.infinity,
-                  color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
-                ),
-              ),
-              SizedBox(height: 24),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Dampak di Masa Depan',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                  ),
-                ),
-              ),
-              SizedBox(height: 8),
-              Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Penanganan sampah yang benar akan menjaga kelestarian bumi di masa depan.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
-              ),
-              SizedBox(height: 24),
-              _ImpactCardsList(),
-              SizedBox(height: 24),
-            ],
-          ),
+            ),
+            const SizedBox(height: 24),
+          ]),
         ),
       ),
     );
