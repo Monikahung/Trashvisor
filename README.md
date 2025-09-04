@@ -36,7 +36,7 @@ flutter run
 - **Hugging Face** – API untuk model AI dan penyimpanan dataset dari pengguna.
 
 ---
-## 🛠️ Teknologi yang Digunakan
+## 👥 Tim Pengembang
 - **Monika**
 - **Raihan Adi Pratama**
 - **Vanessa Angelika**
