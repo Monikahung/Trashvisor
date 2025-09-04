@@ -11,15 +11,28 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// ========================================
 /// KONSTANTA DESAIN DAN UKURAN
 /// ========================================
+/// Catatan: ubah nilai-nilai di bawah ini untuk men-tune tampilan.
+/// - Gunakan unit piksel langsung (double) yang konsisten.
+/// - Untuk layout responsif, pertimbangkan menggunakan multipliers
+///   berdasarkan MediaQuery.size (mis. size.width * 0.2) daripada nilai statis.
 const double kLogoHeight = 160;
 const double kIconSize = 120;
 const double kSponsorLogoHeight = 50;
-const double kBottomPadding = 20;
-const double kSponsorLogoSpacing = 35;
+const double kBottomPadding = 30; // Semakin besar, bisa buat logo sponsor dengan teks nya agak lebih keatas mendekat logo utama
+const double kSponsorLogoSpacing = 40;
 const double kTitleFontSize = 28;
 const double kDidukungFontSize = 12;
 const double kSpacerAfterDidukung = 25;
 const Color kTrashvisorTitleColor = Color(0xFF2C5E2B);
+
+/// Penjelasan singkat konstanta:
+/// - kLogoHeight: tinggi logo utama pada splash. Turunkan/naikkan untuk skala visual.
+/// - kIconSize: fallback icon size jika gambar logo gagal dimuat.
+/// - kSponsorLogoHeight: tinggi logo sponsor di bagian bawah splash.
+/// - kBottomPadding: jarak vertikal dari bawah layar untuk bagian sponsor.
+/// - kSponsorLogoSpacing: jarak antar logo sponsor horizontal.
+/// - kTitleFontSize / kDidukungFontSize: font size untuk teks pada splash.
+///   Jika ingin tampilan lebih responsif, ganti constant dengan scale berdasarkan MediaQuery.
 
 /// ========================================
 /// FUNGSI UTAMA APLIKASI
@@ -53,8 +66,10 @@ class MyApp extends StatelessWidget {
       title: 'Trashvisor App',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
+        // Catatan: ubah seedColor atau gunakan ThemeData.light/dark sesuai kebutuhan.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
         useMaterial3: true,
+        // TextTheme: pusatkan styling teks yang dipakai di splash dan komponen lain.
         textTheme: TextTheme(
           headlineLarge: TextStyle(
             fontSize: kTitleFontSize,
@@ -67,31 +82,40 @@ class MyApp extends StatelessWidget {
           ),
         ),
       ),
-      // FutureBuilder digunakan untuk memuat daftar kamera.
-      // Setelah kamera siap, kita cek apakah user sudah login.
+      // ========================================
+      // FUTUREBUILDER: memuat daftar kamera sebelum menampilkan root screen
+      // ========================================
+      // Penjelasan:
+      // - availableCameras() mengambil daftar kamera perangkat (front/back).
+      // - Splash/Onboarding/Login hanya ditampilkan setelah kamera siap
+      //   karena beberapa halaman (mis. pendaftaran/fitur) memerlukan CameraDescription.
+      // - Jika ingin menunda pemanggilan availableCameras (mis. untuk faster startup),
+      //   pertimbangkan inisialisasi kamera di halaman yang benar-benar membutuhkannya.
       home: FutureBuilder<List<CameraDescription>>(
         future: availableCameras(),
         builder: (context, snapshot) {
+          // Tampilkan loading saat menunggu ketersediaan kamera.
           if (snapshot.connectionState == ConnectionState.waiting) {
-            // Menunggu kamera tersedia → tampilkan progress.
             return const Scaffold(
               body: Center(child: CircularProgressIndicator()),
             );
           } else if (snapshot.hasError) {
+            // Jika error mengambil kamera, tampilkan pesan error agar mudah debug.
             return Scaffold(
               body: Center(child: Text('Error: ${snapshot.error}')),
             );
           } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
-            // Kamera tersedia: cek sesi Supabase.
+            // Kamera ada → cek sesi Supabase
             final session = Supabase.instance.client.auth.currentSession;
             if (session != null) {
-              // Jika ada sesi (sudah login), langsung ke HomePage.
+              // Jika sudah login → langsung ke HomePage (kirim daftar kamera).
               return HomePage(cameras: snapshot.data!);
             }
-            // Jika belum login, tampilkan splash & onboarding.
+            // Jika belum login → tampilkan splash (yang akan lanjut ke onboarding/login).
             return _SplashScreen(cameras: snapshot.data!);
           } else {
-            // Perangkat tidak memiliki kamera.
+            // Perangkat tidak memiliki kamera → fallback UI
+            // Jika aplikasi harus berjalan tanpa kamera, ganti fallback ini dengan rute alternatif.
             return const Scaffold(
               body: Center(
                 child: Text('Tidak ada kamera yang tersedia pada perangkat ini.'),
@@ -121,6 +145,8 @@ class _SplashScreen extends StatefulWidget {
 }
 
 class _SplashScreenState extends State<_SplashScreen> {
+  // Daftar aset onboarding yang ingin dicache untuk transisi mulus.
+  // Jika menambah slide onboarding, tambahkan path file di list ini.
   static const _onboardingAssets = <String>[
     'assets/images/onboarding/onboarding1.png',
     'assets/images/onboarding/onboarding2.png',
@@ -134,20 +160,29 @@ class _SplashScreenState extends State<_SplashScreen> {
     _prepareAndGo();
   }
 
+  /// _prepareAndGo
+  /// - Cache image onboarding untuk transisi yang lebih mulus.
+  /// - Tunggu minimal 3 detik supaya splash terlihat.
+  /// - Cek SharedPreferences untuk flag 'onboardingComplete'.
+  /// - Navigasi ke LoginPage / OnBoardingPage sesuai status.
   Future<void> _prepareAndGo() async {
     // Cache gambar onboarding agar nanti mulus.
     await Future.wait(_onboardingAssets.map((path) async {
       try {
         await precacheImage(AssetImage(path), context);
-      } catch (_) {}
+      } catch (_) {
+        // Jika gagal precache, biarkan — app masih jalan tapi transisi mungkin kurang mulus.
+      }
     }));
 
     // Pastikan splash tampil minimal 3 detik.
+    // Ubah Duration di sini jika mau splash lebih panjang/pendek.
     await Future.delayed(const Duration(seconds: 3));
 
     if (!mounted) return;
 
     // Periksa apakah onboarding sudah pernah diselesaikan.
+    // 'onboardingComplete' diset di OnBoardingPage._finish()
     final prefs = await SharedPreferences.getInstance();
     final onboardingComplete = prefs.getBool('onboardingComplete') ?? false;
 
@@ -167,6 +202,8 @@ class _SplashScreenState extends State<_SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Splash menggunakan SafeArea + Stack untuk menempatkan logo di tengah
+    // dan sponsor di bagian bawah.
     return Scaffold(
       body: SafeArea(
         child: Stack(
@@ -186,6 +223,8 @@ class _SplashScreenState extends State<_SplashScreen> {
   }
 
   /// Logo Trashvisor
+  /// - Ubah path gambar jika ingin menggunakan logo berbeda.
+  /// - kLogoHeight mengatur tinggi logo; untuk responsif, gunakan ukuran relatif.
   Widget _buildLogoSection() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -194,6 +233,7 @@ class _SplashScreenState extends State<_SplashScreen> {
           'assets/images/logo_apk.png',
           height: kLogoHeight,
           fit: BoxFit.contain,
+          // errorBuilder menampilkan icon fallback jika asset gagal dimuat.
           errorBuilder: (_, __, ___) => const Icon(
             Icons.delete,
             size: kIconSize,
@@ -209,6 +249,7 @@ class _SplashScreenState extends State<_SplashScreen> {
   }
 
   /// Bagian sponsor di bawah
+  /// - Ubah daftar gambar sponsor atau spacing sesuai kebutuhan.
   Widget _buildSponsorSection() {
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -236,6 +277,8 @@ class _SplashScreenState extends State<_SplashScreen> {
 /// ========================================
 /// WIDGET LOGO SPONSOR
 /// ========================================
+/// - Hanya menampilkan asset image dengan tinggi kSponsorLogoHeight.
+/// - Gunakan errorBuilder untuk fallback bila asset tidak tersedia.
 class _SponsorLogo extends StatelessWidget {
   final String path;
   const _SponsorLogo(this.path);
