@@ -3,6 +3,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:async';
+import 'package:trashvisor/core/colors.dart';
 
 class LocationPage extends StatefulWidget {
   const LocationPage({super.key});
@@ -362,29 +363,35 @@ class _LocationPageState extends State<LocationPage> {
 
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: const Color(0xFF678E35),
+        toolbarHeight: 80,
+        backgroundColor: AppColors.mossGreen,
+        elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios, color: Colors.white),
+          icon: const Icon(
+            Icons.arrow_back_ios, 
+            color: AppColors.whiteSmoke),
           onPressed: () {
             Navigator.pop(context);
           },
         ),
         title: Row(
-          mainAxisSize: MainAxisSize.min,
           children: [
             Container(
-              padding: const EdgeInsets.all(5),
+              width: 48,
+              height: 48,
               decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                border: Border.all(color: Colors.grey[300]!, width: 2),
+                color: AppColors.fernGreen,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
-              child: const Icon(Icons.location_on, color: Color(0xFF678E35)),
+              child: const Center(
+                child: Icon(Icons.location_on, color: AppColors.whiteSmoke),
+              ),
             ),
             const SizedBox(width: 10),
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
-              children: const [
+              children: [
                 Text(
                   'Trash Location',
                   style: TextStyle(
@@ -397,8 +404,8 @@ class _LocationPageState extends State<LocationPage> {
                 Text(
                   'Temukan lokasi TPS terdekat',
                   style: TextStyle(
-                    color: Colors.white70,
-                    fontFamily: 'Nunito',
+                    color: Colors.white.withAlpha((255 * 0.8).round()),
+                    fontFamily: 'Roboto',
                     fontSize: 12,
                   ),
                 ),
