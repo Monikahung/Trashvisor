@@ -4,6 +4,7 @@ import 'package:trashvisor/core/colors.dart';
 import 'package:camera/camera.dart';
 import 'package:trashvisor/pages/trashvision/handling_trash.dart';
 import 'package:trashvisor/pages/trashchatbot/chatbot.dart';
+import 'package:trashvisor/pages/trashvision/trash_location.dart';
 import 'scan_camera.dart';
 
 class ResultScan extends StatefulWidget {
@@ -308,7 +309,14 @@ class _ResultScanState extends State<ResultScan> {
                   _buildInfoCard(
                     title: 'Trash\nLocation',
                     imagePath: 'assets/images/info_3.png',
-                    onTap: _startScanCamera,
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => TrashLocation(),
+                        ),
+                      );
+                    },
                   ),
                 ],
               ),

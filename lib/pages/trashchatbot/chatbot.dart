@@ -95,11 +95,13 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
         final data = jsonDecode(response.body);
         final aiMessage = data['choices'][0]['message']['content'];
 
+        if (!mounted) return; // 🚀 cek dulu
         setState(() {
           _messages.removeLast();
           _messages.add({'role': 'ai', 'content': aiMessage});
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _messages.removeLast();
           _messages.add({
@@ -110,6 +112,7 @@ class _TrashChatbotPageState extends State<TrashChatbotPage> {
         debugPrint('Gagal: ${response.statusCode}, ${response.body}');
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _messages.removeLast();
         _messages.add({

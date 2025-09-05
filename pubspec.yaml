@@ -20,6 +20,9 @@ dependencies:
   cupertino_icons: ^1.0.8
   supabase_flutter: ^2.10.0 # supabase import
   shared_preferences: ^2.2.2 # shared preferences
+  flutter_map: ^6.1.0
+  latlong2: ^0.9.1
+  geolocator: ^11.0.0
 
 dev_dependencies:
   flutter_test:
