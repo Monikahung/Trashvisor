@@ -8,13 +8,13 @@ const int? kDailyLimit = 2;
 class CapsuleService {
   final _client = Supabase.instance.client;
 
-  /// Berapa JENIS SAMPAH unik yang sukses dibuat hari ini (WIB).
+  /// Hitung berapa JENIS SAMPAH unik yang sukses dibuat hari ini (zona WIB).
   Future<int> countDistinctSuccessToday() async {
     final user = _client.auth.currentUser;
     if (user == null) return 0;
 
-    // Coba pakai kolom created_on_jkt (stored). Kalau belum ada, fallback created_at.
     try {
+      // Prefer kolom created_on_jkt (stored)
       final rows = await _client
           .from('simulation_logs')
           .select('waste_type')
@@ -29,7 +29,7 @@ class CapsuleService {
       }
       return set.length;
     } catch (_) {
-      // Fallback: pakai created_at rentang hari UTC (approx)
+      // Fallback: pakai created_at hari UTC (approx)
       final nowUtc = DateTime.now().toUtc();
       final start =
           DateTime.utc(nowUtc.year, nowUtc.month, nowUtc.day).toIso8601String();
@@ -48,15 +48,14 @@ class CapsuleService {
     }
   }
 
-  /// Helper untuk UI: sisa limit hari ini (berdasarkan success saja).
+  /// Sisa limit hari ini (hanya hitung yang benar-benar sukses).
   Future<int?> remainingLimit() async {
     if (kDailyLimit == null) return null;
     final used = await countDistinctSuccessToday();
-    final remain = (kDailyLimit! - used).clamp(0, kDailyLimit!);
-    return remain;
+    return (kDailyLimit! - used).clamp(0, kDailyLimit!);
   }
 
-  /// Panggil Edge Function. Jika gagal → fallback asset & narasi default.
+  /// Panggil Edge Function. Jika gagal / success=false → fallback asset lokal.
   Future<CapsuleResult> generate({
     required String wasteType,
     required CapsuleScenario scenario,
@@ -72,7 +71,6 @@ class CapsuleService {
     }
 
     try {
-      // Opsional: kirim info sisa kuota ke server.
       int? remaining;
       if (kDailyLimit != null) {
         remaining = await remainingLimit();
@@ -88,15 +86,32 @@ class CapsuleService {
         },
       );
 
+      // Edge Function balikin JSON (bisa success=true/false)
       final data = res.data;
       final map = (data is Map<String, dynamic>)
           ? data
           : json.decode(data as String);
-      final result = CapsuleResult.fromJson(map);
 
+      final parsed = CapsuleResult.fromJson(map);
+
+      // 🔴 FIX PENTING:
+      // Kalau Edge Function balikin success=false ATAU items kosong → JANGAN biarin UI kosong.
+      // Kita ganti result ke FALLBACK lokal, tapi tetap tandai success=false dan simpan errorMessage.
+      final result = (parsed.success && parsed.items.isNotEmpty)
+          ? parsed
+          : CapsuleResult(
+              items: _fallbackItems(wt, scenario),
+              seed: parsed.seed.isNotEmpty ? parsed.seed : 'edge-empty',
+              success: false,
+              errorMessage:
+                  parsed.errorMessage ?? 'edge returned empty/failed',
+            );
+
+      // Logging ke DB (tidak fatal kalau gagal)
       await _logSimulation(wt, scenario, result);
       return result;
     } catch (e) {
+      // Jika call function melempar exception (network, parse, dsb) → fallback lokal
       final items = _fallbackItems(wt, scenario);
       final result = CapsuleResult(
         items: items,
@@ -110,10 +125,11 @@ class CapsuleService {
   }
 
   // ============ Helpers ============
+
   Future<void> _logSimulation(
       String wasteType, CapsuleScenario scenario, CapsuleResult result) async {
     final user = _client.auth.currentUser;
-    if (user == null) return;
+    if (user == null) return; // jika belum login, abaikan pencatatan
 
     final imageUrls = result.items
         .map((e) => e.imageUrl ?? e.fallbackAsset ?? '')
@@ -133,6 +149,7 @@ class CapsuleService {
     });
   }
 
+  /// Paket fallback 5 kartu (pakai aset lokal) — aman dipakai saat gagal.
   List<CapsuleItem> _fallbackItems(String wasteType, CapsuleScenario scenario) {
     final w = wasteType.isEmpty ? 'sampah' : wasteType.toLowerCase();
     final good = scenario == CapsuleScenario.good;
