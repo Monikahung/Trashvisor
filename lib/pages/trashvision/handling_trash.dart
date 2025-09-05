@@ -55,11 +55,14 @@ class _HandlingTrashState extends State<HandlingTrash> {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         final rawText = data['choices'][0]['text'].trim();
+
+        if (!mounted) return; // ✅ pastikan widget masih ada
         setState(() {
           _generatedContent = rawText;
           _isLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           _generatedContent = "Gagal mengambil data: ${response.statusCode}";
           _isLoading = false;
@@ -67,6 +70,7 @@ class _HandlingTrashState extends State<HandlingTrash> {
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _generatedContent = "Terjadi kesalahan: $e";
         _isLoading = false;
