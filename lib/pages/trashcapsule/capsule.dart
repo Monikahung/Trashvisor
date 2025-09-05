@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:trashvisor/core/colors.dart';
 import 'package:trashvisor/pages/home_profile_notifications/home.dart';
@@ -5,6 +6,94 @@ import 'true_capsule.dart';
 import 'false_capsule.dart';
 import 'package:camera/camera.dart';
 
+/// ===================================================================
+/// STATE GLOBAL SEDERHANA
+/// ===================================================================
+class CapsuleGlobal {
+  static String searchText = '';
+}
+
+/// ===================================================================
+/// TOAST KECIL DI ATAS LAYAR (posisi agak turun & bisa diatur)
+/// ===================================================================
+OverlayEntry? _topToastEntry;
+Timer? _topToastTimer;
+
+/// [extraTop] untuk menggeser toast sedikit ke bawah dari status bar.
+/// default 44 agar tidak terlalu nempel.
+void showTopToast(
+  BuildContext context, {
+  required String message,
+  Color backgroundColor = const Color(0xFF2F3B4B),
+  IconData icon = Icons.info_outline,
+  Duration duration = const Duration(seconds: 2),
+  double extraTop = 44,
+}) {
+  final overlay = Overlay.of(context);
+  if (overlay == null) return;
+
+  _topToastTimer?.cancel();
+  _topToastEntry?.remove();
+  _topToastEntry = null;
+
+  final topInset = MediaQuery.of(context).padding.top + 12;
+
+  _topToastEntry = OverlayEntry(
+    builder: (_) => Positioned(
+      top: topInset + extraTop,
+      left: 12,
+      right: 12,
+      child: IgnorePointer(
+        ignoring: true,
+        child: Material(
+          color: Colors.transparent,
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 520),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                color: backgroundColor,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: const [
+                  BoxShadow(blurRadius: 12, color: Colors.black26)
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, color: Colors.white),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      message,
+                      maxLines: 3,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    ),
+  );
+
+  overlay.insert(_topToastEntry!);
+  _topToastTimer = Timer(duration, () {
+    _topToastEntry?.remove();
+    _topToastEntry = null;
+  });
+}
+
+/// =========================
+/// Search bar (pakai controller)
+/// =========================
 class _SearchBarSection extends StatelessWidget {
   final TextEditingController controller;
   const _SearchBarSection({required this.controller});
@@ -20,7 +109,9 @@ class _SearchBarSection extends StatelessWidget {
           border: Border.all(color: AppColors.fernGreen, width: 1),
         ),
         child: TextField(
-          controller: controller, // <<<<<<<<<<<<<< penting: pertahankan teks
+          controller: controller,
+          onChanged: (v) => CapsuleGlobal.searchText = v,
+          textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
             hintText: 'Telusuri Jenis Sampah',
             hintStyle: TextStyle(
@@ -37,8 +128,6 @@ class _SearchBarSection extends StatelessWidget {
             color: Colors.black,
             fontFamily: 'Roboto',
           ),
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) {}, // sesuai requirement: tetap di halaman ini
         ),
       ),
     );
@@ -48,11 +137,7 @@ class _SearchBarSection extends StatelessWidget {
 /// Bagian tombol pilihan (Penanganan Baik & Buruk)
 class _ActionButtonsSection extends StatelessWidget {
   final List<CameraDescription> cameras;
-  final TextEditingController controller;
-  const _ActionButtonsSection({
-    required this.cameras,
-    required this.controller,
-  });
+  const _ActionButtonsSection({required this.cameras});
 
   Widget _buildActionButton({
     required IconData icon,
@@ -73,10 +158,9 @@ class _ActionButtonsSection extends StatelessWidget {
           children: [
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: const [
-                Icon(Icons.check_circle_outline,
-                    color: AppColors.whiteSmoke, size: 32),
-                Icon(Icons.arrow_drop_down,
+              children: [
+                Icon(icon, color: AppColors.whiteSmoke, size: 32),
+                const Icon(Icons.arrow_drop_down,
                     color: AppColors.whiteSmoke, size: 32),
               ],
             ),
@@ -98,7 +182,6 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final waste = controller.text.trim();
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
@@ -109,13 +192,21 @@ class _ActionButtonsSection extends StatelessWidget {
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
               onTap: () {
+                if (CapsuleGlobal.searchText.trim().isEmpty) {
+                  showTopToast(
+                    context,
+                    message: 'Tulis dulu jenis sampah di kolom atas.',
+                    backgroundColor: const Color(0xFFEA4335),
+                    icon: Icons.error_outline,
+                    extraTop: 44,
+                  );
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => TrueTrashCapsule(
-                      cameras: cameras,
-                      initialWasteType: waste, // << pass teks
-                    ),
+                    builder: (context) =>
+                        TrueTrashCapsule(cameras: cameras),
                   ),
                 );
               },
@@ -128,13 +219,21 @@ class _ActionButtonsSection extends StatelessWidget {
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,
               onTap: () {
+                if (CapsuleGlobal.searchText.trim().isEmpty) {
+                  showTopToast(
+                    context,
+                    message: 'Tulis dulu jenis sampah di kolom atas.',
+                    backgroundColor: const Color(0xFFEA4335),
+                    icon: Icons.error_outline,
+                    extraTop: 44,
+                  );
+                  return;
+                }
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) => FalseTrashCapsule(
-                      cameras: cameras,
-                      initialWasteType: waste, // << pass teks
-                    ),
+                    builder: (context) =>
+                        FalseTrashCapsule(cameras: cameras),
                   ),
                 );
               },
@@ -146,7 +245,7 @@ class _ActionButtonsSection extends StatelessWidget {
   }
 }
 
-/// Bagian kartu dampak (tetap sama—placeholder)
+/// Bagian kartu dampak (placeholder saat belum memilih)
 class _ImpactCardSection extends StatelessWidget {
   const _ImpactCardSection();
 
@@ -192,25 +291,18 @@ class _ImpactCardSection extends StatelessWidget {
 }
 
 /// Halaman utama Trash Capsule
-class TrashCapsulePage extends StatefulWidget {
+class TrashCapsulePage extends StatelessWidget {
   final List<CameraDescription> cameras;
   const TrashCapsulePage({super.key, required this.cameras});
 
   @override
-  State<TrashCapsulePage> createState() => _TrashCapsulePageState();
-}
-
-class _TrashCapsulePageState extends State<TrashCapsulePage> {
-  final _searchC = TextEditingController();
-
-  @override
-  void dispose() {
-    _searchC.dispose();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
+    final controller = TextEditingController(text: CapsuleGlobal.searchText);
+    final waste = CapsuleGlobal.searchText.trim();
+    final desc = waste.isEmpty
+        ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
+        : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
+
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
       appBar: AppBar(
@@ -218,11 +310,14 @@ class _TrashCapsulePageState extends State<TrashCapsulePage> {
         backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
+          icon:
+              const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(builder: (context) => HomePage(cameras: widget.cameras)),
+              MaterialPageRoute(
+                builder: (context) => HomePage(cameras: cameras),
+              ),
             );
           },
         ),
@@ -234,29 +329,35 @@ class _TrashCapsulePageState extends State<TrashCapsulePage> {
               decoration: BoxDecoration(
                 color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.whiteSmoke, width: 1),
+                border:
+                    Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
               child: const Center(
-                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
+                child: Icon(Icons.card_giftcard_outlined,
+                    color: AppColors.whiteSmoke),
               ),
             ),
             const SizedBox(width: 10),
-            Expanded(
+            const Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Text(
+                  Text(
                     'Trash Capsule',
                     style: TextStyle(
-                      color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold, fontFamily: 'Nunito',
+                      color: Colors.white,
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      fontFamily: 'Nunito',
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     'Simulasi dampak pengelolaan sampah',
                     style: TextStyle(
-                      color: Colors.white.withAlpha((255 * 0.8).round()),
-                      fontSize: 12, fontFamily: 'Roboto',
+                      color: Colors.white70,
+                      fontSize: 12,
+                      fontFamily: 'Roboto',
                     ),
                   ),
                 ],
@@ -271,33 +372,41 @@ class _TrashCapsulePageState extends State<TrashCapsulePage> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: <Widget>[
               const SizedBox(height: 30),
-              _SearchBarSection(controller: _searchC),
+              _SearchBarSection(controller: controller),
               const SizedBox(height: 24),
               const Padding(
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Pilih Tindak Penanganan',
                   style: TextStyle(
-                    fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen,
+                    fontSize: 22,
+                    fontFamily: 'Nunito',
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkMossGreen,
                   ),
                 ),
               ),
               const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
-                  'Tentukan tindakan penanganan sampah yang akan kamu lakukan.',
-                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto'),
+                  desc,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black,
+                    fontFamily: 'Roboto',
+                  ),
                 ),
               ),
               const SizedBox(height: 24),
-              _ActionButtonsSection(cameras: widget.cameras, controller: _searchC),
+              _ActionButtonsSection(cameras: cameras),
               const SizedBox(height: 24),
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 24.0),
                 child: Container(
-                  height: 1, width: double.infinity,
-                  color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
+                  height: 1,
+                  width: double.infinity,
+                  color: AppColors.darkMossGreen.withOpacity(0.5),
                 ),
               ),
               const SizedBox(height: 24),
@@ -306,7 +415,10 @@ class _TrashCapsulePageState extends State<TrashCapsulePage> {
                 child: Text(
                   'Dampak di Masa Depan',
                   style: TextStyle(
-                    fontSize: 22, fontFamily: 'Nunito', fontWeight: FontWeight.bold, color: AppColors.darkMossGreen,
+                    fontSize: 22,
+                    fontFamily: 'Nunito',
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.darkMossGreen,
                   ),
                 ),
               ),
@@ -315,7 +427,11 @@ class _TrashCapsulePageState extends State<TrashCapsulePage> {
                 padding: EdgeInsets.symmetric(horizontal: 24.0),
                 child: Text(
                   'Tindakan yang kamu lakukan akan menentukan masa depan bumi.',
-                  style: TextStyle(fontSize: 14, color: Colors.black, fontFamily: 'Roboto'),
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.black,
+                    fontFamily: 'Roboto',
+                  ),
                 ),
               ),
               const SizedBox(height: 24),

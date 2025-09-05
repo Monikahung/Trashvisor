@@ -1,5 +1,5 @@
 // Model ringan + enum untuk Trash Capsule
-// Aman di-share di 3 layar dan service.
+// Aman dipakai di 3 layar dan di service.
 
 enum CapsuleScenario { good, bad }
 
@@ -14,8 +14,8 @@ extension CapsuleScenarioX on CapsuleScenario {
 class CapsuleItem {
   final String title;
   final String description;
-  final String? imageUrl;      // hasil dari generator (kalau sukses)
-  final String? fallbackAsset; // fallback asset lokal
+  final String? imageUrl;      // hasil generator (jika sukses)
+  final String? fallbackAsset; // asset lokal (fallback)
 
   CapsuleItem({
     required this.title,
@@ -39,12 +39,23 @@ class CapsuleItem {
       };
 }
 
-/// Paket hasil generator (5 item + seed)
+/// Paket hasil generator (5 item + seed + status)
 class CapsuleResult {
   final List<CapsuleItem> items;
   final String seed;
 
-  CapsuleResult({required this.items, required this.seed});
+  /// true jika Edge Function sukses menghasilkan gambar/narasi.
+  final bool success;
+
+  /// Pesan error dari function (kalau ada).
+  final String? errorMessage;
+
+  CapsuleResult({
+    required this.items,
+    required this.seed,
+    required this.success,
+    this.errorMessage,
+  });
 
   factory CapsuleResult.fromJson(Map<String, dynamic> j) => CapsuleResult(
         items: (j['items'] as List)
@@ -52,8 +63,14 @@ class CapsuleResult {
             .map(CapsuleItem.fromJson)
             .toList(),
         seed: (j['seed'] as String?) ?? 'local-fallback',
+        success: (j['success'] as bool?) ?? true,
+        errorMessage: j['errorMessage'] as String?,
       );
 
-  Map<String, dynamic> toJson() =>
-      {'items': items.map((e) => e.toJson()).toList(), 'seed': seed};
+  Map<String, dynamic> toJson() => {
+        'items': items.map((e) => e.toJson()).toList(),
+        'seed': seed,
+        'success': success,
+        if (errorMessage != null) 'errorMessage': errorMessage,
+      };
 }
