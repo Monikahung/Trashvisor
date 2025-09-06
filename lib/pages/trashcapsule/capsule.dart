@@ -30,7 +30,6 @@ void showTopToast(
   double extraTop = 44,
 }) {
   final overlay = Overlay.of(context);
-  if (overlay == null) return;
 
   _topToastTimer?.cancel();
   _topToastEntry?.remove();
