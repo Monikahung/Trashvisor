@@ -53,59 +53,58 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
     }
   }
 
-  Widget _impactCard(CapsuleItem item, {required String defaultAsset}) {
+  Widget _singleStory({
+    required CapsuleItem item,
+    required String fallbackAsset,
+  }) {
     final url = item.imageUrl;
-    final asset = item.fallbackAsset ?? defaultAsset;
-    Widget image;
-    if (url != null && url.isNotEmpty) {
-      image = Image.network(
-        url,
-        width: 90,
-        height: 110,
-        fit: BoxFit.cover,
-        errorBuilder: (_, _, _) =>
-            Image.asset(asset, width: 90, height: 110, fit: BoxFit.cover),
-      );
-    } else {
-      image =
-          Image.asset(asset, width: 90, height: 110, fit: BoxFit.cover);
-    }
+    final hasUrl = url != null && url.isNotEmpty;
 
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-      margin: const EdgeInsets.only(bottom: 16),
-      decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.fernGreen, width: 1),
-      ),
-      child: Row(
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          ClipRRect(borderRadius: BorderRadius.circular(10), child: image),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  item.title,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                    fontFamily: 'Nunito',
+          ClipRRect(
+            borderRadius: BorderRadius.circular(16),
+            child: hasUrl
+                ? Image.network(
+                    url!,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
+                    errorBuilder: (_, __, ___) => Image.asset(
+                      fallbackAsset,
+                      height: 220,
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                    ),
+                  )
+                : Image.asset(
+                    fallbackAsset,
+                    height: 220,
+                    width: double.infinity,
+                    fit: BoxFit.cover,
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  item.description,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(height: 16),
+          Text(
+            item.title,
+            style: const TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: AppColors.darkMossGreen,
+              fontFamily: 'Nunito',
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            item.description,
+            style: const TextStyle(
+              fontSize: 15,
+              height: 1.5,
+              color: Colors.black87,
+              fontFamily: 'Roboto',
             ),
           ),
         ],
@@ -120,6 +119,19 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
+    final firstItem = (_result?.items.isNotEmpty ?? false)
+        ? _result!.items.first
+        : null;
+
+    final fallbackItem = CapsuleItem(
+      title: 'Masa Depan Jika Ditangani Buruk',
+      description:
+          'Tanpa pengelolaan yang baik, ${waste.isEmpty ? 'sampah' : waste.toLowerCase()} '
+          'menumpuk di selokan dan sungai, menimbulkan banjir serta gangguan kesehatan. '
+          'Biaya kebersihan naik, kualitas hidup menurun.',
+      fallbackAsset: 'assets/images/false_capsule.png',
+    );
+
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
       appBar: AppBar(
@@ -127,8 +139,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
         backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () {
             Navigator.push(
               context,
@@ -146,12 +157,10 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
               decoration: BoxDecoration(
                 color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(24),
-                border:
-                    Border.all(color: AppColors.whiteSmoke, width: 1),
+                border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
               child: const Center(
-                child: Icon(Icons.card_giftcard_outlined,
-                    color: AppColors.whiteSmoke),
+                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
               ),
             ),
             const SizedBox(width: 10),
@@ -212,8 +221,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                     ),
                     const SizedBox(height: 8),
                     Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 24.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Text(
                         desc,
                         style: const TextStyle(
@@ -227,8 +235,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                     _ActionButtonsSection(cameras: widget.cameras),
                     const SizedBox(height: 24),
                     Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 24.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Container(
                         height: 1,
                         width: double.infinity,
@@ -262,19 +269,11 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                     ),
                     const SizedBox(height: 24),
 
-                    Padding(
-                      padding:
-                          const EdgeInsets.symmetric(horizontal: 24.0),
-                      child: Column(
-                        children: (_result?.items ?? const <CapsuleItem>[])
-                            .map((e) => _impactCard(
-                                  e,
-                                  defaultAsset:
-                                      'assets/images/false_capsule.png',
-                                ))
-                            .toList(),
-                      ),
+                    _singleStory(
+                      item: firstItem ?? fallbackItem,
+                      fallbackAsset: 'assets/images/false_capsule.png',
                     ),
+
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -289,8 +288,7 @@ class _SearchBarSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controller =
-        TextEditingController(text: CapsuleGlobal.searchText);
+    final controller = TextEditingController(text: CapsuleGlobal.searchText);
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
@@ -341,8 +339,7 @@ class _ActionButtonsSection extends StatelessWidget {
       return GestureDetector(
         onTap: onTap,
         child: Container(
-          padding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
           decoration: BoxDecoration(
             color: color,
             borderRadius: BorderRadius.circular(16),
@@ -397,8 +394,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        TrueTrashCapsule(cameras: cameras),
+                    builder: (context) => TrueTrashCapsule(cameras: cameras),
                   ),
                 );
               },
@@ -415,8 +411,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 Navigator.push(
                   context,
                   MaterialPageRoute(
-                    builder: (context) =>
-                        TrashCapsulePage(cameras: cameras),
+                    builder: (context) => TrashCapsulePage(cameras: cameras),
                   ),
                 );
               },
