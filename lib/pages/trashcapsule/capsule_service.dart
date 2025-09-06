@@ -10,7 +10,7 @@ import 'capsule_models.dart';
 ///   pada hari ini (zona waktu Jakarta).
 /// - Error pada generate TIDAK mengurangi kuota harian.
 /// ------------------------------------------------------------------
-const int? kDailyLimit = 2;
+const int kDailyLimit = 2;
 
 /// (BARU) Default image size yang valid untuk OpenAI Images saat ini.
 /// Sisi server-mu sudah memvalidasi hanya menerima

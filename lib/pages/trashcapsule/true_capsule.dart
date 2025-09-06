@@ -73,11 +73,11 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
             borderRadius: BorderRadius.circular(16),
             child: hasUrl
                 ? Image.network(
-                    url!,
+                    url,
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.asset(
+                    errorBuilder: (_, _, _) => Image.asset(
                       fallbackAsset,
                       height: 220,
                       width: double.infinity,
