@@ -234,7 +234,7 @@ class _SplashScreenState extends State<_SplashScreen> {
           height: kLogoHeight,
           fit: BoxFit.contain,
           // errorBuilder menampilkan icon fallback jika asset gagal dimuat.
-          errorBuilder: (_, __, ___) => const Icon(
+          errorBuilder: (_, _, _) => const Icon(
             Icons.delete,
             size: kIconSize,
           ),
@@ -289,7 +289,7 @@ class _SponsorLogo extends StatelessWidget {
       path,
       height: kSponsorLogoHeight,
       fit: BoxFit.contain,
-      errorBuilder: (_, __, ___) => SizedBox(
+      errorBuilder: (_, _, _) => SizedBox(
         width: kSponsorLogoHeight,
         height: kSponsorLogoHeight,
       ),

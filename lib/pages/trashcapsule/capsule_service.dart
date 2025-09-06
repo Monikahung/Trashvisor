@@ -3,7 +3,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'capsule_models.dart';
 
 /// Ubah ke `null` jika ingin mematikan limit di sisi klien.
-const int? kDailyLimit = 2;
+const int kDailyLimit = 2;
 
 class CapsuleService {
   final _client = Supabase.instance.client;
@@ -50,9 +50,8 @@ class CapsuleService {
 
   /// Sisa limit hari ini (hanya hitung yang benar-benar sukses).
   Future<int?> remainingLimit() async {
-    if (kDailyLimit == null) return null;
     final used = await countDistinctSuccessToday();
-    return (kDailyLimit! - used).clamp(0, kDailyLimit!);
+    return (kDailyLimit - used).clamp(0, kDailyLimit);
   }
 
   /// Panggil Edge Function. Jika gagal / success=false → fallback asset lokal.
@@ -72,10 +71,8 @@ class CapsuleService {
 
     try {
       int? remaining;
-      if (kDailyLimit != null) {
-        remaining = await remainingLimit();
-      }
-
+      remaining = await remainingLimit();
+    
       final res = await _client.functions.invoke(
         'capsule-generate',
         body: {

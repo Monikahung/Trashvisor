@@ -45,7 +45,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
       showTopToast(
         context,
         message:
-            'Gambar/Narasi gagal di-generate. Sisa Limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
+            'Gambar/Narasi gagal di-generate. Sisa Limit ${remain ?? '-'}${'/$kDailyLimit'}',
         backgroundColor: const Color(0xFFEA4335),
         icon: Icons.error_outline,
         extraTop: 52,
@@ -63,7 +63,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
         width: 90,
         height: 110,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) =>
+        errorBuilder: (_, _, _) =>
             Image.asset(asset, width: 90, height: 110, fit: BoxFit.cover),
       );
     } else {
@@ -232,7 +232,7 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                       child: Container(
                         height: 1,
                         width: double.infinity,
-                        color: AppColors.darkMossGreen.withOpacity(0.5),
+                        color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -331,7 +331,7 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget _btn({
+    Widget btn({
       required IconData icon,
       required String label,
       required Color color,
@@ -378,7 +378,7 @@ class _ActionButtonsSection extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.check_circle_outline,
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
@@ -406,7 +406,7 @@ class _ActionButtonsSection extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.not_interested,
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,

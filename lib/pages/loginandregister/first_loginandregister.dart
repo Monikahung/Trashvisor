@@ -91,7 +91,7 @@ class LoginRegisterPage extends StatelessWidget {
                   'assets/illustrations/puzzle_top.png',
                   fit: BoxFit.fitWidth,           // <<< tidak over-zoom
                   alignment: Alignment.topCenter, // <<< posisikan di atas
-                  errorBuilder: (_, __, ___) => const SizedBox.shrink(),
+                  errorBuilder: (_, _, _) => const SizedBox.shrink(),
                 ),
               ),
 
@@ -222,7 +222,7 @@ class BrandHeader extends StatelessWidget {
         Image.asset(
           assetPath,
           height: iconSize,
-          errorBuilder: (_, __, ___) => Container(
+          errorBuilder: (_, _, _) => Container(
             width: iconSize,
             height: iconSize,
             decoration: BoxDecoration(
