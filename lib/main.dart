@@ -18,7 +18,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 const double kLogoHeight = 160;
 const double kIconSize = 120;
 const double kSponsorLogoHeight = 50;
-const double kBottomPadding = 30; // Semakin besar, bisa buat logo sponsor dengan teks nya agak lebih keatas mendekat logo utama
+const double kBottomPadding =
+    30; // Semakin besar, bisa buat logo sponsor dengan teks nya agak lebih keatas mendekat logo utama
 const double kSponsorLogoSpacing = 40;
 const double kTitleFontSize = 28;
 const double kDidukungFontSize = 12;
@@ -77,9 +78,7 @@ class MyApp extends StatelessWidget {
             color: kTrashvisorTitleColor,
             letterSpacing: 0.2,
           ),
-          bodySmall: const TextStyle(
-            fontSize: kDidukungFontSize,
-          ),
+          bodySmall: const TextStyle(fontSize: kDidukungFontSize),
         ),
       ),
       // ========================================
@@ -107,18 +106,20 @@ class MyApp extends StatelessWidget {
           } else if (snapshot.hasData && snapshot.data!.isNotEmpty) {
             // Kamera ada → cek sesi Supabase
             final session = Supabase.instance.client.auth.currentSession;
-            if (session != null) {
-              // Jika sudah login → langsung ke HomePage (kirim daftar kamera).
-              return HomePage(cameras: snapshot.data!);
-            }
-            // Jika belum login → tampilkan splash (yang akan lanjut ke onboarding/login).
-            return _SplashScreen(cameras: snapshot.data!);
+            // Cek dan kirimkan status login ke _SplashScreen
+            final bool isLoggedIn = session != null;
+            return _SplashScreen(
+              cameras: snapshot.data!,
+              isLoggedIn: isLoggedIn,
+            );
           } else {
             // Perangkat tidak memiliki kamera → fallback UI
             // Jika aplikasi harus berjalan tanpa kamera, ganti fallback ini dengan rute alternatif.
             return const Scaffold(
               body: Center(
-                child: Text('Tidak ada kamera yang tersedia pada perangkat ini.'),
+                child: Text(
+                  'Tidak ada kamera yang tersedia pada perangkat ini.',
+                ),
               ),
             );
           }
@@ -138,7 +139,8 @@ class MyApp extends StatelessWidget {
 /// di SharedPreferences menjadi true (harus dilakukan di OnBoardingPage).
 class _SplashScreen extends StatefulWidget {
   final List<CameraDescription> cameras;
-  const _SplashScreen({required this.cameras});
+  final bool isLoggedIn;
+  const _SplashScreen({required this.cameras, required this.isLoggedIn});
 
   @override
   State<_SplashScreen> createState() => _SplashScreenState();
@@ -167,13 +169,15 @@ class _SplashScreenState extends State<_SplashScreen> {
   /// - Navigasi ke LoginPage / OnBoardingPage sesuai status.
   Future<void> _prepareAndGo() async {
     // Cache gambar onboarding agar nanti mulus.
-    await Future.wait(_onboardingAssets.map((path) async {
-      try {
-        await precacheImage(AssetImage(path), context);
-      } catch (_) {
-        // Jika gagal precache, biarkan — app masih jalan tapi transisi mungkin kurang mulus.
-      }
-    }));
+    await Future.wait(
+      _onboardingAssets.map((path) async {
+        try {
+          await precacheImage(AssetImage(path), context);
+        } catch (_) {
+          // Jika gagal precache, biarkan — app masih jalan tapi transisi mungkin kurang mulus.
+        }
+      }),
+    );
 
     // Pastikan splash tampil minimal 3 detik.
     // Ubah Duration di sini jika mau splash lebih panjang/pendek.
@@ -181,22 +185,32 @@ class _SplashScreenState extends State<_SplashScreen> {
 
     if (!mounted) return;
 
-    // Periksa apakah onboarding sudah pernah diselesaikan.
-    // 'onboardingComplete' diset di OnBoardingPage._finish()
-    final prefs = await SharedPreferences.getInstance();
-    final onboardingComplete = prefs.getBool('onboardingComplete') ?? false;
-
-    // Navigasi sesuai kondisi:
-    if (onboardingComplete) {
-      if (!mounted) return; // pastikan widget masih ada
+    // Periksa status isLoggedIn yang dikirim dari MyApp
+    if (widget.isLoggedIn) {
+      // Jika pengguna sudah login, langsung ke HomePage.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
+        MaterialPageRoute(builder: (_) => HomePage(cameras: widget.cameras)),
       );
     } else {
+      // Jika belum login, jalankan logika pengecekan onboarding yang sudah ada.
+      final prefs = await SharedPreferences.getInstance();
+      final onboardingComplete = prefs.getBool('onboardingComplete') ?? false;
+
       if (!mounted) return;
-      Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => OnBoardingPage(cameras: widget.cameras)),
-      );
+
+      if (onboardingComplete) {
+        // Navigasi ke LoginPage
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
+        );
+      } else {
+        // Navigasi ke OnBoardingPage
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => OnBoardingPage(cameras: widget.cameras),
+          ),
+        );
+      }
     }
   }
 
@@ -234,16 +248,10 @@ class _SplashScreenState extends State<_SplashScreen> {
           height: kLogoHeight,
           fit: BoxFit.contain,
           // errorBuilder menampilkan icon fallback jika asset gagal dimuat.
-          errorBuilder: (_, _, _) => const Icon(
-            Icons.delete,
-            size: kIconSize,
-          ),
+          errorBuilder: (_, _, _) => const Icon(Icons.delete, size: kIconSize),
         ),
         const SizedBox(height: 16),
-        Text(
-          'Trashvisor',
-          style: Theme.of(context).textTheme.headlineLarge,
-        ),
+        Text('Trashvisor', style: Theme.of(context).textTheme.headlineLarge),
       ],
     );
   }
@@ -254,10 +262,7 @@ class _SplashScreenState extends State<_SplashScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(
-          'Didukung oleh',
-          style: Theme.of(context).textTheme.bodySmall,
-        ),
+        Text('Didukung oleh', style: Theme.of(context).textTheme.bodySmall),
         const SizedBox(height: kSpacerAfterDidukung),
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -289,10 +294,8 @@ class _SponsorLogo extends StatelessWidget {
       path,
       height: kSponsorLogoHeight,
       fit: BoxFit.contain,
-      errorBuilder: (_, _, _) => SizedBox(
-        width: kSponsorLogoHeight,
-        height: kSponsorLogoHeight,
-      ),
+      errorBuilder: (_, _, _) =>
+          SizedBox(width: kSponsorLogoHeight, height: kSponsorLogoHeight),
     );
   }
 }
