@@ -58,8 +58,11 @@ class TrashLocationHeader extends StatelessWidget {
                 color: AppColors.fernGreen,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
-                  color: AppColors.whiteSmoke, size: 20),
+              child: const Icon(
+                Icons.arrow_back_ios_new,
+                color: AppColors.whiteSmoke,
+                size: 20,
+              ),
             ),
           ),
         ),
@@ -72,16 +75,18 @@ class TrashLocationHeader extends StatelessWidget {
 class TrashLocationCard extends StatelessWidget {
   final String distance;
   final String time;
+  final String type;
   final String locationName;
   final double rating;
   final int reviewCount;
-  final String imagePath;
+  final String imagePath; // Sekarang ini adalah URL dari API
   final VoidCallback onTap;
 
   const TrashLocationCard({
     super.key,
     required this.distance,
     required this.time,
+    required this.type,
     required this.locationName,
     required this.rating,
     required this.reviewCount,
@@ -109,9 +114,34 @@ class TrashLocationCard extends StatelessWidget {
               borderRadius: BorderRadius.circular(15),
               child: SizedBox(
                 width: 95,
-                child: Image.asset(
+                height: 95, // Tambahkan tinggi yang tetap untuk konsistensi
+                // Ubah Image.asset menjadi Image.network
+                child: Image.network(
                   imagePath,
                   fit: BoxFit.cover,
+                  // Tampilkan gambar default jika pemuatan dari jaringan gagal
+                  errorBuilder: (context, error, stackTrace) {
+                    debugPrint("Gagal memuat gambar dari URL: $error");
+                    return Image.asset(
+                      'assets/images/default_location.png',
+                      fit: BoxFit.cover,
+                    );
+                  },
+                  // Tampilkan indikator loading saat gambar sedang dimuat
+                  loadingBuilder: (context, child, loadingProgress) {
+                    if (loadingProgress == null) return child;
+                    return Center(
+                      child: CircularProgressIndicator(
+                        valueColor: const AlwaysStoppedAnimation<Color>(
+                          AppColors.fernGreen,
+                        ),
+                        value: loadingProgress.expectedTotalBytes != null
+                            ? loadingProgress.cumulativeBytesLoaded /
+                                  loadingProgress.expectedTotalBytes!
+                            : null,
+                      ),
+                    );
+                  },
                 ),
               ),
             ),
@@ -121,9 +151,9 @@ class TrashLocationCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  // Teks jarak dan waktu
+                  // Teks jarak, waktu, dan tipe
                   Text(
-                    '$distance | $time',
+                    '$distance | $time | $type',
                     style: const TextStyle(
                       fontFamily: 'Roboto',
                       fontSize: 14,
@@ -174,7 +204,8 @@ class TrashLocationCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   // Tombol "Lihat Peta"
                   SizedBox(
-                    width: double.infinity, // Membuat tombol mengisi lebar yang tersedia
+                    width: double
+                        .infinity, // Membuat tombol mengisi lebar yang tersedia
                     child: ElevatedButton(
                       onPressed: onTap,
                       style: ElevatedButton.styleFrom(
@@ -182,7 +213,10 @@ class TrashLocationCard extends StatelessWidget {
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 10,
+                        ),
                       ),
                       child: const Text(
                         'Lihat Peta',
@@ -200,7 +234,7 @@ class TrashLocationCard extends StatelessWidget {
             ),
           ],
         ),
-      )
+      ),
     );
   }
 }
