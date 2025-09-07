@@ -52,6 +52,8 @@ flutter:
           weight: 600
         - asset: assets/fonts/roboto/Roboto-Bold.ttf
           weight: 700
+        - asset: asset/fonts/roboto/Roboto-ExtraBold.ttf
+          weight: 800
     - family: Nunito
       fonts:
         - asset: assets/fonts/nunito/Nunito-Regular.ttf
@@ -60,4 +62,5 @@ flutter:
           weight: 600
         - asset: assets/fonts/nunito/Nunito-Bold.ttf
           weight: 700
-
+        - asset: assets/fonts/nunito/Nunito-ExtraBold.ttf
+          weight: 800
