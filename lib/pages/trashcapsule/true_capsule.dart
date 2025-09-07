@@ -7,6 +7,7 @@ import 'package:camera/camera.dart';
 
 import 'capsule_models.dart';
 import 'capsule_service.dart';
+import 'capsule_cache.dart'; // 🔹 clear cache saat search berubah
 
 class TrueTrashCapsule extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -39,108 +40,114 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
       _loading = false;
     });
 
-    // ===== Notifikasi kaya (3 cabang) =====
-    final textOk = res.textSuccess ?? (res.items.isNotEmpty);
-    final imgOk  = res.imageSuccess ?? false;
+    // ========= TOAST: info keberhasilan =========
+    final List<CapsuleItem> items = _result?.items ?? const <CapsuleItem>[];
+    final bool hasImage =
+        items.any((e) => (e.imageUrl != null && e.imageUrl!.isNotEmpty));
 
-    if (textOk && imgOk) {
-      final remain = await _service.remainingLimit();
-      if (!mounted) return;
+    final remain = await _service.remainingLimit();
+    if (!mounted) return;
+
+    if (hasImage) {
       showTopToast(
         context,
-        message: 'Gambar & narasi berhasil. Sisa limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
-        backgroundColor: const Color(0xFF34A853), // hijau
+        message:
+            'Berhasil! Gambar + narasi dibuat. Sisa limit ${remain ?? '-'} / $kDailyLimit',
+        backgroundColor: const Color(0xFF34A853),
         icon: Icons.check_circle_outline,
         extraTop: 52,
       );
-    } else if (textOk && !imgOk) {
-      final remain = await _service.remainingLimit();
-      if (!mounted) return;
+    } else if (items.isNotEmpty) {
       showTopToast(
         context,
-        message: 'Narasi berhasil, gambar gagal. Pakai gambar default. Limit tidak berkurang (${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}).',
-        backgroundColor: const Color(0xFFF9AB00), // kuning
+        message:
+            'Narasi berhasil, gambar gagal. Sisa limit tetap ${remain ?? '-'} / $kDailyLimit',
+        backgroundColor: const Color(0xFFFFC107),
         icon: Icons.info_outline,
         extraTop: 52,
       );
     } else {
       showTopToast(
         context,
-        message: 'Narasi gagal; menampilkan konten default. Limit tidak berkurang.',
-        backgroundColor: const Color(0xFFEA4335), // merah
+        message: 'Gagal membuat konten. Dipakai fallback.',
+        backgroundColor: const Color(0xFFEA4335),
         icon: Icons.error_outline,
         extraTop: 52,
       );
     }
   }
 
-  /// Bagian visual: 1 gambar besar (dari item pertama) + daftar 3 judul & narasi
-  Widget _storySection({
-    required List<CapsuleItem> items,
-    required String fallbackAsset,
-  }) {
-    final first = items.isNotEmpty ? items.first : null;
-    final url = first?.imageUrl;
-    final hasUrl = url != null && url.isNotEmpty;
+/// ===============================
+/// HEADER: 1 gambar 1:1
+/// - Jika imageUrl ada -> pakai SquareHeaderImage (contain, no crop)
+/// - Jika fallback asset -> pakai BoxFit.cover (biar penuh, nggak aneh)
+/// ===============================
+Widget _headerImage() {
+  final String? url =
+      (_result?.items.isNotEmpty ?? false) ? _result!.items.first.imageUrl : null;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+  if (url != null && url.isNotEmpty) {
+    return SquareHeaderImage(
+      imageUrl: url,
+      fallbackAsset: 'assets/images/true_capsule.png',
+    );
+  }
+
+  // Fallback (default) -> full fit (cover)
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    child: AspectRatio(
+      aspectRatio: 1, // kotak 1:1
+      child: Container(
+        decoration: BoxDecoration(
+          color: const Color(0xFFE8F5E9),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.fernGreen, width: 1),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: Image.asset(
+          'assets/images/true_capsule.png',
+          fit: BoxFit.cover, // 🔸 penuhi kotak (boleh crop dikit)
+        ),
+      ),
+    ),
+  );
+}
+
+
+  /// ===============================
+  /// Kartu narasi (TANPA gambar)
+  /// ===============================
+  Widget _narrativeCard(CapsuleItem item) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+      margin: const EdgeInsets.only(bottom: 16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFE8F5E9),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: AppColors.fernGreen, width: 1),
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Gambar representatif (1 buah)
-          ClipRRect(
-            borderRadius: BorderRadius.circular(16),
-            child: hasUrl
-                ? Image.network(
-                    url!,
-                    height: 220,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.asset(
-                      fallbackAsset,
-                      height: 220,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                    ),
-                  )
-                : Image.asset(
-                    fallbackAsset,
-                    height: 220,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                  ),
+          Text(
+            item.title,
+            style: const TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: AppColors.darkMossGreen,
+              fontFamily: 'Nunito',
+            ),
           ),
-          const SizedBox(height: 16),
-
-          // 3 Judul + narasi (text only)
-          ...items.map((e) => Padding(
-                padding: const EdgeInsets.only(bottom: 16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      e.title,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.darkMossGreen,
-                        fontFamily: 'Nunito',
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      e.description,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        height: 1.5,
-                        color: Colors.black87,
-                        fontFamily: 'Roboto',
-                      ),
-                    ),
-                  ],
-                ),
-              )),
+          const SizedBox(height: 6),
+          Text(
+            item.description,
+            style: const TextStyle(
+              fontSize: 14,
+              color: Colors.black,
+              fontFamily: 'Roboto',
+            ),
+          ),
         ],
       ),
     );
@@ -153,30 +160,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
-    // Data final yang akan ditampilkan:
-    final items = (_result?.items.isNotEmpty ?? false)
-        ? _result!.items
-        : <CapsuleItem>[
-            // fallback kalau kosong benar-benar
-            CapsuleItem(
-              title: 'Lingkungan Sehat',
-              description:
-                  'Pengelolaan ${waste.isEmpty ? 'sampah' : waste.toLowerCase()} yang benar menjaga sungai, laut, dan tanah tetap bersih.',
-              fallbackAsset: 'assets/images/true_capsule.png',
-            ),
-            CapsuleItem(
-              title: 'Udara Bersih',
-              description:
-                  'Polusi berkurang karena tidak ada pembakaran sembarangan.',
-              fallbackAsset: 'assets/images/true_capsule_2.png',
-            ),
-            CapsuleItem(
-              title: 'Sumber Terjaga',
-              description:
-                  'Pemilahan & daur ulang membantu melestarikan sumber daya alam.',
-              fallbackAsset: 'assets/images/true_capsule_3.png',
-            ),
-          ];
+    final List<CapsuleItem> items = _result?.items ?? const <CapsuleItem>[];
 
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
@@ -189,9 +173,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(cameras: widget.cameras),
-              ),
+              MaterialPageRoute(builder: (context) => HomePage(cameras: widget.cameras)),
             );
           },
         ),
@@ -313,14 +295,17 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
                         ),
                       ),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
 
-                    // ==== 1 gambar + 3 narasi ====
-                    _storySection(
-                      items: items,
-                      fallbackAsset: 'assets/images/true_capsule.png',
+                    // ======== 1) HEADER IMAGE: hanya satu gambar di atas ========
+                    _headerImage(),
+                    const SizedBox(height: 16),
+
+                    // ======== 2) TIGA NARASI: kartu teks tanpa gambar ========
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                      child: Column(children: items.map(_narrativeCard).toList()),
                     ),
-
                     const SizedBox(height: 24),
                   ],
                 ),
@@ -330,7 +315,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
   }
 }
 
-/// Search bar (seed dari global agar teks persist)
+/// Search bar (seed dari global + clear cache saat berubah)
 class _SearchBarSection extends StatelessWidget {
   const _SearchBarSection();
 
@@ -347,7 +332,11 @@ class _SearchBarSection extends StatelessWidget {
         ),
         child: TextField(
           controller: controller,
-          onChanged: (v) => CapsuleGlobal.searchText = v,
+          onChanged: (v) {
+            // ⚠️ Penting: clear cache saat user mengubah search
+            CapsuleGlobal.searchText = v;
+            CapsuleCache.instance.clear();
+          },
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
             hintText: 'Telusuri Jenis Sampah',
@@ -432,9 +421,7 @@ class _ActionButtonsSection extends StatelessWidget {
               onTap: () {
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) => TrashCapsulePage(cameras: cameras),
-                  ),
+                  MaterialPageRoute(builder: (context) => TrashCapsulePage(cameras: cameras)),
                 );
               },
             ),

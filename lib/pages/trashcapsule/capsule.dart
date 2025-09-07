@@ -6,6 +6,9 @@ import 'true_capsule.dart';
 import 'false_capsule.dart';
 import 'package:camera/camera.dart';
 
+// 🔹 cache: saat user mengubah teks search → hasil generate lama harus di-invalid
+import 'capsule_cache.dart';
+
 /// ===================================================================
 /// STATE GLOBAL SEDERHANA
 /// ===================================================================
@@ -49,14 +52,11 @@ void showTopToast(
           child: Center(
             child: Container(
               constraints: const BoxConstraints(maxWidth: 520),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [
-                  BoxShadow(blurRadius: 12, color: Colors.black26)
-                ],
+                boxShadow: const [BoxShadow(blurRadius: 12, color: Colors.black26)],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -109,7 +109,11 @@ class _SearchBarSection extends StatelessWidget {
         ),
         child: TextField(
           controller: controller,
-          onChanged: (v) => CapsuleGlobal.searchText = v,
+          // 🔸 sangat penting: saat teks berubah, clear cache supaya pencarian baru generate ulang
+          onChanged: (v) {
+            CapsuleGlobal.searchText = v;
+            CapsuleCache.instance.clear();
+          },
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
             hintText: 'Telusuri Jenis Sampah',
@@ -159,8 +163,7 @@ class _ActionButtonsSection extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Icon(icon, color: AppColors.whiteSmoke, size: 32),
-                const Icon(Icons.arrow_drop_down,
-                    color: AppColors.whiteSmoke, size: 32),
+                const Icon(Icons.arrow_drop_down, color: AppColors.whiteSmoke, size: 32),
               ],
             ),
             const SizedBox(height: 16),
@@ -203,10 +206,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 }
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        TrueTrashCapsule(cameras: cameras),
-                  ),
+                  MaterialPageRoute(builder: (context) => TrueTrashCapsule(cameras: cameras)),
                 );
               },
             ),
@@ -230,10 +230,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 }
                 Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (context) =>
-                        FalseTrashCapsule(cameras: cameras),
-                  ),
+                  MaterialPageRoute(builder: (context) => FalseTrashCapsule(cameras: cameras)),
                 );
               },
             ),
@@ -309,14 +306,11 @@ class TrashCapsulePage extends StatelessWidget {
         backgroundColor: AppColors.mossGreen,
         elevation: 0,
         leading: IconButton(
-          icon:
-              const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
+          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
           onPressed: () {
             Navigator.push(
               context,
-              MaterialPageRoute(
-                builder: (context) => HomePage(cameras: cameras),
-              ),
+              MaterialPageRoute(builder: (context) => HomePage(cameras: cameras)),
             );
           },
         ),
@@ -328,12 +322,10 @@ class TrashCapsulePage extends StatelessWidget {
               decoration: BoxDecoration(
                 color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(24),
-                border:
-                    Border.all(color: AppColors.whiteSmoke, width: 1),
+                border: Border.all(color: AppColors.whiteSmoke, width: 1),
               ),
               child: const Center(
-                child: Icon(Icons.card_giftcard_outlined,
-                    color: AppColors.whiteSmoke),
+                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
               ),
             ),
             const SizedBox(width: 10),
@@ -438,6 +430,49 @@ class TrashCapsulePage extends StatelessWidget {
               const SizedBox(height: 30),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// ===================================================================
+/// SquareHeaderImage (REUSABLE, dipakai di halaman Baik/Buruk)
+/// -------------------------------------------------------------------
+/// MENAMPILKAN 1 GAMBAR HEADER BERBENTUK KOTAK (1:1) TANPA TERPOTONG.
+/// - Jika [imageUrl] ada -> load network.
+/// - Jika kosong -> pakai [fallbackAsset].
+/// - Pakai BoxFit.contain supaya konten utuh (tidak crop).
+/// - Dibungkus border + radius agar konsisten dengan style app.
+/// ===================================================================
+class SquareHeaderImage extends StatelessWidget {
+  final String? imageUrl;
+  final String fallbackAsset;
+
+  const SquareHeaderImage({
+    super.key,
+    required this.imageUrl,
+    required this.fallbackAsset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final Widget img = (imageUrl != null && imageUrl!.isNotEmpty)
+        ? Image.network(imageUrl!, fit: BoxFit.contain)
+        : Image.asset(fallbackAsset, fit: BoxFit.contain);
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: AspectRatio(
+        aspectRatio: 1, // 1:1 — benar-benar kotak
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9), // latar lembut saat contain
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.fernGreen, width: 1),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Center(child: img), // gambar tampil utuh (no crop)
         ),
       ),
     );
