@@ -30,14 +30,22 @@ Future<Map<String, dynamic>?> _sendImageToHuggingFace(String imagePath) async {
     if (response.statusCode == 200 && response.data != null) {
       final result = response.data as Map<String, dynamic>;
       debugPrint("Hasil dari Hugging Face: $result");
-      return result;
+      // Menambahkan validasi untuk memastikan data hasil tidak kosong atau tidak valid.
+      if (result['result'] != null && (result['result'] as List).isNotEmpty) {
+        return result;
+      } else {
+        debugPrint("Hasil dari AI tidak valid atau kosong.");
+        return {'error': 'Invalid or empty result'}; // Mengembalikan error
+      }
     } else {
       debugPrint("Upload gagal, status code: ${response.statusCode}");
     }
   } on DioException catch (e) {
     debugPrint("Error saat upload gambar: $e");
+    return {'error': 'Network or server error'}; // Mengembalikan error
   } catch (e) {
     debugPrint("Error unexpected: $e");
+    return {'error': 'Unexpected error'}; // Mengembalikan error
   }
 
   return null;
@@ -115,7 +123,7 @@ class _ScanCameraState extends State<ScanCamera> {
     if (!mounted) return;
     setState(() => _isLoading = false);
 
-    if (result != null) {
+    if (result != null && result['error'] == null) {
       // Navigasi ke ResultScan tanpa dispose kamera dulu
       Navigator.pushReplacement(
         context,
@@ -128,7 +136,17 @@ class _ScanCameraState extends State<ScanCamera> {
       );
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gagal mendapatkan hasil dari AI. Silakan coba lagi.')),
+        SnackBar(
+          content: const Text('Hasil deteksi tidak valid. Silakan ambil gambar ulang.'),
+          backgroundColor: Colors.red, 
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
       );
     }
   }
@@ -149,7 +167,7 @@ class _ScanCameraState extends State<ScanCamera> {
       if (!mounted) return;
       setState(() => _isLoading = false);
 
-      if (result != null) {
+      if (result != null && result['error'] == null) {
         // Navigasi ke ResultScan tanpa dispose kamera dulu
         Navigator.pushReplacement(
           context,
@@ -162,14 +180,34 @@ class _ScanCameraState extends State<ScanCamera> {
         );
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal mendapatkan hasil dari AI. Silakan coba lagi.')),
+          SnackBar(
+            content: const Text('Hasil deteksi tidak valid. Silakan ambil gambar ulang.'),
+            backgroundColor: Colors.red, 
+            duration: const Duration(seconds: 3),
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(15),
+            ),
+            margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          ),
         );
       }
     } on CameraException catch (e) {
       setState(() => _isLoading = false);
       debugPrint("Error saat ambil foto: $e");
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error kamera: ${e.code}')),
+        SnackBar(
+          content: Text('Error kamera: ${e.code}'),
+          backgroundColor: Colors.red, 
+          duration: const Duration(seconds: 3),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15),
+          ),
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
       );
     } catch (e) {
       setState(() => _isLoading = false);
