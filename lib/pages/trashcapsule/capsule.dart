@@ -405,7 +405,7 @@ class TrashCapsulePage extends StatelessWidget {
                 child: Container(
                   height: 1,
                   width: double.infinity,
-                  color: AppColors.darkMossGreen.withOpacity(0.5),
+                  color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                 ),
               ),
               const SizedBox(height: 24),

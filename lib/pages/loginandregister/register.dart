@@ -877,7 +877,7 @@ class _BrandHeader extends StatelessWidget {
           child: Image.asset(
             assetPath,
             height: iconSize, // UBAH ukuran logo dari RegisterDimens.brandIcon
-            errorBuilder: (_, __, ___) => Container(
+            errorBuilder: (_, _, _) => Container(
               width: iconSize,
               height: iconSize,
               decoration: BoxDecoration(

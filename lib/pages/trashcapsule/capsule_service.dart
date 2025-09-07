@@ -12,7 +12,7 @@ import 'capsule_models.dart';
 ///   textSuccess && imageSuccess (keduanya OK) sehingga
 ///   **narasi saja tidak mengurangi limit**.
 /// ------------------------------------------------------------------
-const int? kDailyLimit = 2;
+const int kDailyLimit = 2;
 
 /// (Tetap) default, bila kamu nanti pakai generator gambar OpenAI.
 /// Untuk Gemini text-only saat ini tidak dipakai, tapi biarkan ada.
@@ -65,9 +65,8 @@ class CapsuleService {
 
   /// Sisa limit hari ini (hanya hitung yang benar-benar success=true).
   Future<int?> remainingLimit() async {
-    if (kDailyLimit == null) return null;
     final used = await countDistinctSuccessToday();
-    return (kDailyLimit! - used).clamp(0, kDailyLimit!);
+    return (kDailyLimit - used).clamp(0, kDailyLimit);
   }
 
   /// Panggil Edge Function. Jika gagal total → fallback asset lokal.
@@ -96,10 +95,8 @@ class CapsuleService {
 
     try {
       int? remaining;
-      if (kDailyLimit != null) {
-        remaining = await remainingLimit();
-      }
-
+      remaining = await remainingLimit();
+    
       final res = await _client.functions.invoke(
         'capsule-generate',
         body: {

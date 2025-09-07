@@ -512,7 +512,7 @@ class _LoginPageState extends State<LoginPage>
                                         fontWeight: FontWeight.w800,
                                         color: AppColors.deepGreen,
                                         fontFamily:
-                                            'assets/fonts/nunito/nunito-extrabold.ttf',
+                                            'Nunito',
                                       ),
                                     ),
                                   ),
@@ -536,7 +536,7 @@ class _LoginPageState extends State<LoginPage>
                                           height: 1.75,
                                           color: AppColors.blackText,
                                           fontFamily:
-                                              'assets/fonts/roboto/roboto-regular.ttf',
+                                              'Roboto',
                                         ),
                                       ),
                                     ),
@@ -680,7 +680,7 @@ class _FieldLabel extends StatelessWidget {
         color: Colors.black87,
         fontWeight: FontWeight.w700,
         // gunakan Nunito Bold sesuai permintaan
-        fontFamily: 'assets/fonts/nunito/nunito-bold.ttf',
+        fontFamily: 'Nunito',
       ),
     );
   }
@@ -767,7 +767,7 @@ class _BrandHeader extends StatelessWidget {
           child: Image.asset(
             assetPath,
             height: iconSize, // <<< ubah ukuran logo dari LoginDimens.brandIcon
-            errorBuilder: (_, __, ___) => Container(
+            errorBuilder: (_, _, _) => Container(
               width: iconSize,
               height: iconSize,
               decoration: BoxDecoration(

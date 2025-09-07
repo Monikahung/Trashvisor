@@ -48,6 +48,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
       if (!mounted) return;
       showTopToast(
         context,
+<<<<<<< HEAD
         message: 'Gambar & narasi berhasil. Sisa limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
         backgroundColor: const Color(0xFF34A853), // hijau
         icon: Icons.check_circle_outline,
@@ -68,6 +69,11 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
         context,
         message: 'Narasi gagal; menampilkan konten default. Limit tidak berkurang.',
         backgroundColor: const Color(0xFFEA4335), // merah
+=======
+        message:
+            'Gambar/Narasi gagal di-generate. Sisa Limit ${remain ?? '-'}${'/$kDailyLimit'}',
+        backgroundColor: const Color(0xFFEA4335),
+>>>>>>> 899d527a9c54c77858cc12de4e7fb681f920693b
         icon: Icons.error_outline,
         extraTop: 52,
       );
@@ -93,11 +99,11 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
             borderRadius: BorderRadius.circular(16),
             child: hasUrl
                 ? Image.network(
-                    url!,
+                    url,
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Image.asset(
+                    errorBuilder: (_, _, _) => Image.asset(
                       fallbackAsset,
                       height: 220,
                       width: double.infinity,
@@ -285,7 +291,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
                       child: Container(
                         height: 1,
                         width: double.infinity,
-                        color: AppColors.darkMossGreen.withOpacity(0.5),
+                        color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -378,7 +384,7 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget _btn({
+    Widget btn({
       required IconData icon,
       required String label,
       required Color color,
@@ -424,7 +430,7 @@ class _ActionButtonsSection extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.check_circle_outline,
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
@@ -441,7 +447,7 @@ class _ActionButtonsSection extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.not_interested,
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,

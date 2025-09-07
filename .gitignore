@@ -1,5 +1,11 @@
 # Secret
 .env
+local.properties
+
+# Keystore
+android/app/keystore/
+android/key.properties
+android/app/src/main/AndroidManifest.xml
 
 # Miscellaneous
 *.class
