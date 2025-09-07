@@ -39,13 +39,33 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
       _loading = false;
     });
 
-    if (!res.success) {
+    final textOk = res.textSuccess ?? (res.items.isNotEmpty);
+    final imgOk  = res.imageSuccess ?? false;
+
+    if (textOk && imgOk) {
       final remain = await _service.remainingLimit();
       if (!mounted) return;
       showTopToast(
         context,
-        message:
-            'Gambar/Narasi gagal di-generate. Sisa Limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
+        message: 'Gambar & narasi berhasil. Sisa limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
+        backgroundColor: const Color(0xFF34A853),
+        icon: Icons.check_circle_outline,
+        extraTop: 52,
+      );
+    } else if (textOk && !imgOk) {
+      final remain = await _service.remainingLimit();
+      if (!mounted) return;
+      showTopToast(
+        context,
+        message: 'Narasi berhasil, gambar gagal. Pakai gambar default. Limit tidak berkurang (${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}).',
+        backgroundColor: const Color(0xFFF9AB00),
+        icon: Icons.info_outline,
+        extraTop: 52,
+      );
+    } else {
+      showTopToast(
+        context,
+        message: 'Narasi gagal; menampilkan konten default. Limit tidak berkurang.',
         backgroundColor: const Color(0xFFEA4335),
         icon: Icons.error_outline,
         extraTop: 52,
@@ -53,11 +73,12 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
     }
   }
 
-  Widget _singleStory({
-    required CapsuleItem item,
+  Widget _storySection({
+    required List<CapsuleItem> items,
     required String fallbackAsset,
   }) {
-    final url = item.imageUrl;
+    final first = items.isNotEmpty ? items.first : null;
+    final url = first?.imageUrl;
     final hasUrl = url != null && url.isNotEmpty;
 
     return Padding(
@@ -88,25 +109,33 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                   ),
           ),
           const SizedBox(height: 16),
-          Text(
-            item.title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkMossGreen,
-              fontFamily: 'Nunito',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            item.description,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.5,
-              color: Colors.black87,
-              fontFamily: 'Roboto',
-            ),
-          ),
+          ...items.map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkMossGreen,
+                        fontFamily: 'Nunito',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      e.description,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.5,
+                        color: Colors.black87,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -119,18 +148,27 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
-    final firstItem = (_result?.items.isNotEmpty ?? false)
-        ? _result!.items.first
-        : null;
-
-    final fallbackItem = CapsuleItem(
-      title: 'Masa Depan Jika Ditangani Buruk',
-      description:
-          'Tanpa pengelolaan yang baik, ${waste.isEmpty ? 'sampah' : waste.toLowerCase()} '
-          'menumpuk di selokan dan sungai, menimbulkan banjir serta gangguan kesehatan. '
-          'Biaya kebersihan naik, kualitas hidup menurun.',
-      fallbackAsset: 'assets/images/false_capsule.png',
-    );
+    final items = (_result?.items.isNotEmpty ?? false)
+        ? _result!.items
+        : <CapsuleItem>[
+            CapsuleItem(
+              title: 'Lingkungan Rusak',
+              description:
+                  '${waste.isEmpty ? 'Sampah' : waste.toLowerCase()} yang tercecer mencemari sungai, laut, dan tanah.',
+              fallbackAsset: 'assets/images/false_capsule.png',
+            ),
+            CapsuleItem(
+              title: 'Udara Tercemar',
+              description: 'Pembakaran sampah menghasilkan asap berbahaya.',
+              fallbackAsset: 'assets/images/false_capsule_2.png',
+            ),
+            CapsuleItem(
+              title: 'Sumber Habis',
+              description:
+                  'Produksi baru tanpa daur ulang menguras sumber daya alam.',
+              fallbackAsset: 'assets/images/false_capsule_3.png',
+            ),
+          ];
 
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
@@ -269,8 +307,8 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
                     ),
                     const SizedBox(height: 24),
 
-                    _singleStory(
-                      item: firstItem ?? fallbackItem,
+                    _storySection(
+                      items: items,
                       fallbackAsset: 'assets/images/false_capsule.png',
                     ),
 
