@@ -97,6 +97,7 @@ class NearestLocationPage extends StatelessWidget {
                           rating: data['rating'],
                           reviewCount: data['reviews'],
                           imagePath: data['image'],
+                          type: data["type"],
                           onTap: () {}, // Aksi saat tombol diklik
                         ),
                       );
