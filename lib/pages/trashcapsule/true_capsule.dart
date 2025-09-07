@@ -39,28 +39,48 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
       _loading = false;
     });
 
-    // Dengan function baru kita mengembalikan success=true meski imageUrl kosong.
-    // Toast ini hanya muncul kalau benar-benar gagal total (shouldn't happen).
-    if (!res.success) {
+    // ===== Notifikasi kaya (3 cabang) =====
+    final textOk = res.textSuccess ?? (res.items.isNotEmpty);
+    final imgOk  = res.imageSuccess ?? false;
+
+    if (textOk && imgOk) {
       final remain = await _service.remainingLimit();
       if (!mounted) return;
       showTopToast(
         context,
-        message:
-            'Gambar/Narasi gagal di-generate. Sisa Limit ${remain ?? '-'}${'/$kDailyLimit'}',
-        backgroundColor: const Color(0xFFEA4335),
+        message: 'Gambar & narasi berhasil. Sisa limit ${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}',
+        backgroundColor: const Color(0xFF34A853), // hijau
+        icon: Icons.check_circle_outline,
+        extraTop: 52,
+      );
+    } else if (textOk && !imgOk) {
+      final remain = await _service.remainingLimit();
+      if (!mounted) return;
+      showTopToast(
+        context,
+        message: 'Narasi berhasil, gambar gagal. Pakai gambar default. Limit tidak berkurang (${remain ?? '-'}${kDailyLimit != null ? '/$kDailyLimit' : ''}).',
+        backgroundColor: const Color(0xFFF9AB00), // kuning
+        icon: Icons.info_outline,
+        extraTop: 52,
+      );
+    } else {
+      showTopToast(
+        context,
+        message: 'Narasi gagal; menampilkan konten default. Limit tidak berkurang.',
+        backgroundColor: const Color(0xFFEA4335), // merah
         icon: Icons.error_outline,
         extraTop: 52,
       );
     }
   }
 
-  /// Widget gambar besar + judul + narasi (1 item saja)
-  Widget _singleStory({
-    required CapsuleItem item,
-    required String fallbackAsset, // asset lokal bila imageUrl null/invalid
+  /// Bagian visual: 1 gambar besar (dari item pertama) + daftar 3 judul & narasi
+  Widget _storySection({
+    required List<CapsuleItem> items,
+    required String fallbackAsset,
   }) {
-    final url = item.imageUrl;
+    final first = items.isNotEmpty ? items.first : null;
+    final url = first?.imageUrl;
     final hasUrl = url != null && url.isNotEmpty;
 
     return Padding(
@@ -68,16 +88,16 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Gambar (network jika ada, selain itu fallback asset)
+          // Gambar representatif (1 buah)
           ClipRRect(
             borderRadius: BorderRadius.circular(16),
             child: hasUrl
                 ? Image.network(
-                    url,
+                    url!,
                     height: 220,
                     width: double.infinity,
                     fit: BoxFit.cover,
-                    errorBuilder: (_, _, _) => Image.asset(
+                    errorBuilder: (_, __, ___) => Image.asset(
                       fallbackAsset,
                       height: 220,
                       width: double.infinity,
@@ -92,25 +112,35 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
                   ),
           ),
           const SizedBox(height: 16),
-          Text(
-            item.title,
-            style: const TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w800,
-              color: AppColors.darkMossGreen,
-              fontFamily: 'Nunito',
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            item.description,
-            style: const TextStyle(
-              fontSize: 15,
-              height: 1.5,
-              color: Colors.black87,
-              fontFamily: 'Roboto',
-            ),
-          ),
+
+          // 3 Judul + narasi (text only)
+          ...items.map((e) => Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      e.title,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.darkMossGreen,
+                        fontFamily: 'Nunito',
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      e.description,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        height: 1.5,
+                        color: Colors.black87,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ],
+                ),
+              )),
         ],
       ),
     );
@@ -123,19 +153,30 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
-    // Ambil item pertama (kalau ada)
-    final firstItem = (_result?.items.isNotEmpty ?? false)
-        ? _result!.items.first
-        : null;
-
-    // Fallback item (jaga-jaga kalau result kosong)
-    final fallbackItem = CapsuleItem(
-      title: 'Masa Depan Jika Ditangani Baik',
-      description:
-          'Pengelolaan yang benar membuat sungai jernih, udara bersih, dan ekonomi sirkular tumbuh. '
-          'Warga memilah dan mendaur ulang sehingga beban TPA berkurang.',
-      fallbackAsset: 'assets/images/true_capsule.png',
-    );
+    // Data final yang akan ditampilkan:
+    final items = (_result?.items.isNotEmpty ?? false)
+        ? _result!.items
+        : <CapsuleItem>[
+            // fallback kalau kosong benar-benar
+            CapsuleItem(
+              title: 'Lingkungan Sehat',
+              description:
+                  'Pengelolaan ${waste.isEmpty ? 'sampah' : waste.toLowerCase()} yang benar menjaga sungai, laut, dan tanah tetap bersih.',
+              fallbackAsset: 'assets/images/true_capsule.png',
+            ),
+            CapsuleItem(
+              title: 'Udara Bersih',
+              description:
+                  'Polusi berkurang karena tidak ada pembakaran sembarangan.',
+              fallbackAsset: 'assets/images/true_capsule_2.png',
+            ),
+            CapsuleItem(
+              title: 'Sumber Terjaga',
+              description:
+                  'Pemilahan & daur ulang membantu melestarikan sumber daya alam.',
+              fallbackAsset: 'assets/images/true_capsule_3.png',
+            ),
+          ];
 
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
@@ -244,7 +285,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
                       child: Container(
                         height: 1,
                         width: double.infinity,
-                        color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
+                        color: AppColors.darkMossGreen.withOpacity(0.5),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -274,9 +315,9 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
                     ),
                     const SizedBox(height: 24),
 
-                    // ==== SATU GAMBAR + NARASI ====
-                    _singleStory(
-                      item: firstItem ?? fallbackItem,
+                    // ==== 1 gambar + 3 narasi ====
+                    _storySection(
+                      items: items,
                       fallbackAsset: 'assets/images/true_capsule.png',
                     ),
 
@@ -337,7 +378,7 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget btn({
+    Widget _btn({
       required IconData icon,
       required String label,
       required Color color,
@@ -383,7 +424,7 @@ class _ActionButtonsSection extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: btn(
+            child: _btn(
               icon: Icons.check_circle_outline,
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
@@ -400,7 +441,7 @@ class _ActionButtonsSection extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: btn(
+            child: _btn(
               icon: Icons.not_interested,
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,

@@ -8,14 +8,14 @@ import 'capsule_models.dart';
 /// NOTE:
 /// - Yang dihitung: JENIS SAMPAH unik yang BERHASIL (success=true)
 ///   pada hari ini (zona waktu Jakarta).
-/// - Error pada generate TIDAK mengurangi kuota harian.
+/// - Dengan desain baru, `success=true` hanya jika
+///   textSuccess && imageSuccess (keduanya OK) sehingga
+///   **narasi saja tidak mengurangi limit**.
 /// ------------------------------------------------------------------
 const int kDailyLimit = 2;
 
-/// (BARU) Default image size yang valid untuk OpenAI Images saat ini.
-/// Sisi server-mu sudah memvalidasi hanya menerima
-/// '1024x1024' | '1024x1536' | '1536x1024' | 'auto'.
-/// Di sini kita set aman ke '1024x1024' agar tidak 400 invalid_value.
+/// (Tetap) default, bila kamu nanti pakai generator gambar OpenAI.
+/// Untuk Gemini text-only saat ini tidak dipakai, tapi biarkan ada.
 const String kDefaultImageSize = '1024x1024';
 
 class CapsuleService {
@@ -30,7 +30,6 @@ class CapsuleService {
     if (user == null) return 0;
 
     try {
-      // Prefer kolom created_on_jkt (stored)
       final rows = await _client
           .from('simulation_logs')
           .select('waste_type')
@@ -64,28 +63,28 @@ class CapsuleService {
     }
   }
 
-  /// Sisa limit hari ini (hanya hitung yang benar-benar sukses).
-  /// ----------------------------------------------------------------------
-  /// Return null jika `kDailyLimit` = null (berarti fitur limit dimatikan).
+  /// Sisa limit hari ini (hanya hitung yang benar-benar success=true).
   Future<int?> remainingLimit() async {
     final used = await countDistinctSuccessToday();
     return (kDailyLimit - used).clamp(0, kDailyLimit);
   }
 
-  /// Panggil Edge Function. Jika gagal / success=false → fallback asset lokal.
+  /// Panggil Edge Function. Jika gagal total → fallback asset lokal.
   /// ----------------------------------------------------------------------
   /// Alur:
   /// 1) Validasi input kosong → langsung fallback lokal (guard).
-  /// 2) Invoke edge function 'capsule-generate' (kirim image_size VALID).
-  /// 3) Parse hasil → jika success=false ATAU items kosong → paksa fallback lokal.
-  /// 4) Catat log ke tabel `simulation_logs` (best-effort, tidak memblokir UI).
+  /// 2) Invoke edge function 'capsule-generate'.
+  /// 3) Parse hasil:
+  ///    - Jika ITEMS ADA (narasi berhasil) → gunakan items tsb,
+  ///      walaupun success=false (gambar gagal). Limit tidak berkurang.
+  ///    - Jika ITEMS KOSONG → pakai fallback lokal.
+  /// 4) Catat log ke tabel `simulation_logs` (best-effort).
   Future<CapsuleResult> generate({
     required String wasteType,
     required CapsuleScenario scenario,
   }) async {
     final wt = wasteType.trim();
     if (wt.isEmpty) {
-      // Tidak mungkin terjadi karena UI sudah validasi, tapi guard lagi saja.
       return CapsuleResult(
         items: _fallbackItems(wt, scenario),
         seed: 'local-empty',
@@ -95,7 +94,6 @@ class CapsuleService {
     }
 
     try {
-      // Opsional: kirim info sisa kuota ke server (tidak wajib).
       int? remaining;
       remaining = await remainingLimit();
     
@@ -104,14 +102,12 @@ class CapsuleService {
         body: {
           'waste_type': wt,
           'scenario': scenario.wire, // 'good' | 'bad'
-          // PENTING: ukuran valid untuk OpenAI saat ini.
-          // Hindari angka bulat seperti 768 yang memicu error 400 "invalid_value".
-          'image_size': kDefaultImageSize,
+          // 'image_size': kDefaultImageSize, // tidak dipakai Gemini text
           if (remaining != null) 'client_remaining': remaining,
         },
       );
 
-      // Edge Function balikin JSON (bisa success=true/false)
+      // Edge Function balikin JSON
       final data = res.data;
       final map = (data is Map<String, dynamic>)
           ? data
@@ -119,11 +115,14 @@ class CapsuleService {
 
       final parsed = CapsuleResult.fromJson(map);
 
-      // 🔴 FIX PENTING (tetap dipertahankan & diperjelas):
-      // Jika edge function gagal (success=false) atau items kosong,
-      // JANGAN biarkan UI kosong. Paksa fallback ke aset lokal,
-      // namun tetap tandai success=false dan simpan errorMessage dari server.
-      final result = (parsed.success && parsed.items.isNotEmpty)
+      // 🔴 Perubahan penting:
+      // - Jika server mengembalikan items (narasi berhasil), pakai items tsb
+      //   meskipun success=false (gambar gagal). Dengan begitu UI tetap
+      //   menampilkan narasi hasil AI, dan limit tidak berkurang
+      //   karena success=false.
+      // - Jika items kosong → fallback lokal.
+      final bool hasText = parsed.items.isNotEmpty;
+      final result = hasText
           ? parsed
           : CapsuleResult(
               items: _fallbackItems(wt, scenario),
@@ -133,11 +132,10 @@ class CapsuleService {
                   parsed.errorMessage ?? 'edge returned empty/failed',
             );
 
-      // Logging ke DB (best-effort; jika gagal tidak mengganggu UI)
       await _safeLogSimulation(wt, scenario, result);
       return result;
     } catch (e) {
-      // Jika call function melempar exception (network, parse, dsb) → fallback lokal
+      // Jika call function melempar exception → fallback lokal
       final items = _fallbackItems(wt, scenario);
       final result = CapsuleResult(
         items: items,
@@ -152,7 +150,6 @@ class CapsuleService {
 
   // ============ Helpers ============
 
-  /// Wrapper logging yang aman: jika insert gagal, error diabaikan.
   Future<void> _safeLogSimulation(
     String wasteType,
     CapsuleScenario scenario,
@@ -161,25 +158,19 @@ class CapsuleService {
     try {
       await _logSimulation(wasteType, scenario, result);
     } catch (_) {
-      // Diamkan saja; kegagalan logging tidak boleh mengganggu UI.
+      // kegagalan logging tidak boleh mengganggu UI
     }
   }
 
   /// Insert log ke tabel `simulation_logs`.
-  /// ----------------------------------------------------------------------
   /// Kolom yang dicatat:
-  /// - user_id (current user)
-  /// - waste_type
-  /// - scenario ('BAIK' / 'BURUK') → sesuai CHECK constraint DB
-  /// - image_urls (gabungan imageUrl atau fallbackAsset)
-  /// - texts (gabungan "title: description")
-  /// - seed (dari server atau 'local-fallback-...')
-  /// - success (true/false sesuai hasil akhir yang dipakai UI)
-  /// - error_message (opsional)
+  /// - user_id, waste_type, scenario ('BAIK'/'BURUK')
+  /// - image_urls (imageUrl atau fallbackAsset), texts (title+desc)
+  /// - seed, success, error_message
   Future<void> _logSimulation(
       String wasteType, CapsuleScenario scenario, CapsuleResult result) async {
     final user = _client.auth.currentUser;
-    if (user == null) return; // jika belum login, abaikan pencatatan
+    if (user == null) return;
 
     final imageUrls = result.items
         .map((e) => e.imageUrl ?? e.fallbackAsset ?? '')
@@ -190,7 +181,7 @@ class CapsuleService {
     await _client.from('simulation_logs').insert({
       'user_id': user.id,
       'waste_type': wasteType,
-      'scenario': scenario.db, // 'BAIK' / 'BURUK'
+      'scenario': scenario.db,
       'image_urls': imageUrls,
       'texts': texts,
       'seed': result.seed,
@@ -199,9 +190,7 @@ class CapsuleService {
     });
   }
 
-  /// Paket fallback 5 kartu (pakai aset lokal) — aman dipakai saat gagal.
-  /// ----------------------------------------------------------------------
-  /// Teks disesuaikan dengan jenis sampah agar tetap terasa kontekstual.
+  /// Paket fallback 3 judul (pakai aset lokal) — aman dipakai saat gagal.
   List<CapsuleItem> _fallbackItems(String wasteType, CapsuleScenario scenario) {
     final w = wasteType.isEmpty ? 'sampah' : wasteType.toLowerCase();
     final good = scenario == CapsuleScenario.good;
@@ -228,18 +217,6 @@ class CapsuleService {
               'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
           fallbackAsset: '${prefix}_3.png',
         ),
-        CapsuleItem(
-          title: 'Ekonomi Tumbuh',
-          description:
-              '$w yang dikelola baik bisa jadi peluang ekonomi sirkular.',
-          fallbackAsset: '${prefix}_4.png',
-        ),
-        CapsuleItem(
-          title: 'Generasi Sehat',
-          description:
-              'Lingkungan bersih dari $w membuat bumi tetap layak huni.',
-          fallbackAsset: '${prefix}_5.png',
-        ),
       ];
     } else {
       return [
@@ -259,28 +236,13 @@ class CapsuleService {
               'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
           fallbackAsset: '${prefix}_3.png',
         ),
-        CapsuleItem(
-          title: 'Ekonomi Rugi',
-          description:
-              'Potensi ekonomi dari $w terbuang, biaya pengelolaan meningkat.',
-          fallbackAsset: '${prefix}_4.png',
-        ),
-        CapsuleItem(
-          title: 'Generasi Terancam',
-          description:
-              'Pencemaran $w memperburuk kualitas hidup generasi mendatang.',
-          fallbackAsset: '${prefix}_5.png',
-        ),
       ];
     }
   }
 
   /// Ambil "tanggal" lokal Jakarta dari waktu sekarang (tanpa jam).
-  /// ----------------------------------------------------------------------
-  /// Dipakai untuk query kolom `created_on_jkt` di DB.
   String _todayJakarta() {
     final nowUtc = DateTime.now().toUtc();
-    // offset Asia/Jakarta = +7 (Indonesia tidak pakai DST)
     final jkt = nowUtc.add(const Duration(hours: 7));
     return '${jkt.year.toString().padLeft(4, '0')}-'
         '${jkt.month.toString().padLeft(2, '0')}-'

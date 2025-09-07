@@ -7,6 +7,41 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:trashvisor/core/colors.dart';
 
+// Kelas untuk memanggil Google Places API
+class MapsApi {
+  static final String _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
+
+  static Future<Map<String, dynamic>> searchPlaces({
+    required String query,
+    required double latitude,
+    required double longitude,
+    String? rankPreference,
+  }) async {
+    final baseUrl =
+        'https://maps.googleapis.com/maps/api/place/textsearch/json';
+    final params = {
+      'query': query,
+      'key': _apiKey,
+      'language': 'id',
+      'location': '$latitude,$longitude',
+      'rankby': 'distance',
+    };
+
+    if (rankPreference != null) {
+      params['rankby'] = rankPreference;
+    }
+
+    final uri = Uri.parse(baseUrl).replace(queryParameters: params);
+    final response = await http.get(uri);
+
+    if (response.statusCode == 200) {
+      return json.decode(response.body);
+    } else {
+      throw Exception('Gagal memuat data dari Maps API: ${response.body}');
+    }
+  }
+}
+
 class LocationPage extends StatefulWidget {
   const LocationPage({super.key});
 
@@ -21,136 +56,18 @@ class _LocationPageState extends State<LocationPage> {
 
   final Set<Marker> _markers = {};
   Set<Polyline> _polylines = {};
+  final Set<Circle> _circles = {};
   double? _distanceInKm;
+  String? _durationText;
   String? _destinationName;
+  List<Map<String, dynamic>> _searchSuggestions = [];
+  final List<Map<String, dynamic>> _nearbyPlaces = [];
 
   late final String _apiKey;
 
-  final List<Map<String, dynamic>> trashLocations = const [
-    {
-      'name': 'TPA Parit Enam, Pangkal Pinang',
-      'coordinates': LatLng(-2.1234520467333087, 106.14289369216657),
-      'type': 'TPA',
-      'rating': 3.7,
-      'reviews': 19,
-    },
-    {
-      'name': 'TPA Kenanga, Bangka',
-      'coordinates': LatLng(-1.9359066298344438, 106.09228684232795),
-      'type': 'TPA',
-      'rating': 4.5,
-      'reviews': 2,
-    },
-    {
-      'name': 'TPA Simpang Tiga, Belinyu, Bangka',
-      'coordinates': LatLng(-1.5712620008436808, 105.78217352700443),
-      'type': 'TPA',
-      'rating': 3.7,
-      'reviews': 3,
-    },
-    {
-      'name': 'TPS 3R KSM. Kawa Begawe, Selindung, Gabek, Bangka',
-      'coordinates': LatLng(-2.0591132074953196, 106.13406335509498),
-      'type': 'TPS',
-      'rating': 5.0,
-      'reviews': 3,
-    },
-    {
-      'name': 'Bank Sampah PangkalPinang',
-      'coordinates': LatLng(-2.120870189632584, 106.10659753486853),
-      'type': 'Bank Sampah',
-      'rating': 5.0,
-      'reviews': 1,
-    },
-    {
-      'name': 'Bank Sampah Desa Karya Makmur, Pemali, Bangka',
-      'coordinates': LatLng(-1.8142061411797634, 106.09560997303396),
-      'type': 'Bank Sampah',
-      'rating': 0.0,
-      'reviews': 0,
-    },
-    {
-      'name': 'Bank sampah pelawan, Koba, PangkalPinang',
-      'coordinates': LatLng(-2.2937790697102307, 106.18114676295912),
-      'type': 'Bank Sampah',
-      'rating': 5.0,
-      'reviews': 2,
-    },
-    {
-      'name': 'Bank Sampah Sepakat Desa Air Limau, Muntok',
-      'coordinates': LatLng(-1.9523199095692418, 105.24653808093647),
-      'type': 'Bank Sampah',
-      'rating': 5.0,
-      'reviews': 2,
-    },
-    {
-      'name': 'PDUS PABRIK DAUR ULANG SAMPAH PEMALI',
-      'coordinates': LatLng(-1.8343182051314526, 106.0727548640453),
-      'type': 'Daur Ulang',
-      'rating': 1.0,
-      'reviews': 1,
-    },
-    {
-      'name': 'Tempat Pembuangan Sampah (TPS) AIK Cemang, Belitung',
-      'coordinates': LatLng(-2.918810335999189, 108.18281498431779),
-      'type': 'TPS',
-      'rating': 4.8,
-      'reviews': 4,
-    },
-    {
-      'name': 'TPA PILANG, Tanjung Pandan, Belitung',
-      'coordinates': LatLng(-2.7357451934770998, 107.66404564051427),
-      'type': 'TPA',
-      'rating': 0.0,
-      'reviews': 0,
-    },
-    {
-      'name': 'Bank Sampah Induk Manggar Belitung Timur',
-      'coordinates': LatLng(-2.78749946687104, 108.27651503156396),
-      'type': 'Bank Sampah',
-      'rating': 4.7,
-      'reviews': 3,
-    },
-    {
-      'name': 'BANK SAMPAH SIJUK, Belitung',
-      'coordinates': LatLng(-2.5501377847133226, 107.68107859664937),
-      'type': 'Bank Sampah',
-      'rating': 5.0,
-      'reviews': 1,
-    },
-    {
-      'name': 'CV Trijaya - Parit Lalang, Pangkal Pinang',
-      'coordinates': LatLng(-2.0697120128678166, 106.11539336412203),
-      'type': 'Daur Ulang',
-      'rating': 5.0,
-      'reviews': 1,
-    },
-    {
-      'name': 'Bangka Recycle - Pangkal Balam, PangkalPinang',
-      'coordinates': LatLng(-2.0311130959553245, 106.14384019213588),
-      'type': 'Daur Ulang',
-      'rating': 4.8,
-      'reviews': 6,
-    },
-    {
-      'name': 'GreenVibe Tote - Merawang, Bangka',
-      'coordinates': LatLng(-2.055204832796862, 106.0828241084341),
-      'type': 'Daur Ulang',
-      'rating': 0.0,
-      'reviews': 0,
-    },
-    {
-      'name': 'Ahau Kardus - Tanjung Pandan, Belitung',
-      'coordinates': LatLng(-2.6957192547471416, 107.6708454483477),
-      'type': 'Daur Ulang',
-      'rating': 5.0,
-      'reviews': 1,
-    },
-  ];
-
   String _getPhotoUrl(String? photoReference) {
     if (photoReference == null || photoReference.isEmpty) {
-      return 'assets/images/bg_handling.png'; // fallback ke asset lokal
+      return 'assets/images/default_location.png'; // fallback ke asset lokal
     }
     return 'https://maps.googleapis.com/maps/api/place/photo'
         '?maxwidth=600'
@@ -165,7 +82,6 @@ class _LocationPageState extends State<LocationPage> {
     _determinePosition().then((_) {
       if (_currentPosition != null) {
         _loadNearbyPlaces();
-        _addManualMarkers();
       }
     });
   }
@@ -196,7 +112,6 @@ class _LocationPageState extends State<LocationPage> {
       desiredAccuracy: LocationAccuracy.high,
     );
 
-    // Check if the widget is still in the tree before calling setState()
     if (mounted) {
       setState(() {
         _currentPosition = LatLng(position.latitude, position.longitude);
@@ -210,14 +125,31 @@ class _LocationPageState extends State<LocationPage> {
             infoWindow: const InfoWindow(title: 'Lokasi Saya'),
           ),
         );
+
+        // Tambahkan Circle untuk visualisasi jarak
+        _circles.add(
+          Circle(
+            circleId: const CircleId('range_circle'),
+            center: _currentPosition!,
+            radius:
+                50000, // Radius dalam meter, sama dengan yang digunakan di API
+            strokeWidth: 1,
+            strokeColor: AppColors.fernGreen.withAlpha((255 * 0.5).round()),
+            fillColor: AppColors.mossGreen.withAlpha((255 * 0.1).round()),
+          ),
+        );
       });
     }
   }
 
+  // Menampilkan lokasi tempat pembuangan sampah dan daur ulang maksimal radius 50 km
   Future<void> _loadNearbyPlaces() async {
     if (_currentPosition == null || _apiKey.isEmpty) {
       return;
     }
+
+    // Bersihkan daftar _nearbyPlaces sebelum memuat data baru
+    _nearbyPlaces.clear();
 
     final Map<String, String> placeQueries = {
       'TPA': 'tempat pembuangan akhir',
@@ -234,82 +166,71 @@ class _LocationPageState extends State<LocationPage> {
 
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-        '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-        '&radius=$radius'
-        '&keyword=${Uri.encodeComponent(keyword)}'
-        '&key=$_apiKey',
+            '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
+            '&radius=$radius'
+            '&keyword=${Uri.encodeComponent(keyword)}'
+            '&key=$_apiKey',
       );
 
       final response = await http.get(url);
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['results'] != null) {
+          if (!mounted) return;
           for (var result in data['results']) {
             final lat = result['geometry']['location']['lat'];
             final lng = result['geometry']['location']['lng'];
-            final name = result['name'];
-            final placeId = result['place_id'];
 
-            // Ambil photo_reference kalau ada
-            final photos = result['photos'] as List?;
-            String? photoRef = photos != null && photos.isNotEmpty
-                ? photos.first['photo_reference']
-                : null;
+            final distance = Geolocator.distanceBetween(
+              _currentPosition!.latitude,
+              _currentPosition!.longitude,
+              lat,
+              lng,
+            ) / 1000; // Hitung jarak dalam km
 
-            _getPhotoUrl(photoRef);
+            // Simpan detail tempat dan jaraknya
+            _nearbyPlaces.add({
+              'name': result['name'],
+              'type': customName,
+              'location': LatLng(lat, lng),
+              'place_id': result['place_id'],
+              'distance': distance, // Simpan jarak
+              'rating': result['rating']?.toDouble() ?? 0.0,
+              'reviews': result['user_ratings_total'] ?? 0,
+              'photo_reference': result['photos']?.first['photo_reference'],
+            });
 
+            // Buat marker seperti biasa
             BitmapDescriptor markerIcon;
             if (customName == 'TPA') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueRed,
-              );
+              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
             } else if (customName == 'TPS') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueViolet,
-              );
+              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
             } else if (customName == 'Bank Sampah') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueGreen,
-              );
+              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
             } else if (customName == 'Daur Ulang') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueYellow,
-              );
+              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
             } else {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-                BitmapDescriptor.hueAzure,
-              );
+              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
             }
 
             setState(() {
               _markers.add(
                 Marker(
-                  markerId: MarkerId(placeId),
+                  markerId: MarkerId(result['place_id']),
                   position: LatLng(lat, lng),
-                  infoWindow: InfoWindow(title: name, snippet: customName),
+                  infoWindow: InfoWindow(title: result['name'], snippet: customName),
                   icon: markerIcon,
                   onTap: () {
-                    // ambil photoReference jika data Google, null kalau manual
-                    final photos = result?['photos'] as List?;
-                    String? photoRef = photos != null && photos.isNotEmpty
-                        ? photos.first['photo_reference']
-                        : null;
-
-                    final imageUrl = _getPhotoUrl(photoRef);
-
-                    _drawRoute(
-                      LatLng(lat, lng), // destination
-                      _currentPosition!, // origin
-                      (distanceKm) {
-                        _showInfoSheet(
-                          name: name,
-                          type: customName, // atau type manual
-                          rating: result?['rating']?.toDouble() ?? 0.0,
-                          reviews: result?['user_ratings_total'] ?? 0,
-                          imageUrl: imageUrl,
-                          distanceInKm: distanceKm,
-                        );
-                      },
+                    // Temukan data yang sudah disimpan untuk marker ini
+                    final placeData = _nearbyPlaces.firstWhere((p) => p['place_id'] == result['place_id']);
+                    _showInfoSheet(
+                      name: placeData['name'],
+                      type: placeData['type'],
+                      rating: placeData['rating'],
+                      reviews: placeData['reviews'],
+                      imageUrl: _getPhotoUrl(placeData['photo_reference']),
+                      destination: placeData['location'],
                     );
                   },
                 ),
@@ -321,91 +242,28 @@ class _LocationPageState extends State<LocationPage> {
         debugPrint('Error saat ambil data $customName: ${response.statusCode}');
       }
     }
-  }
-
-  void _addManualMarkers() {
+    
+    // Urutkan daftar tempat setelah semua data terisi
+    if (!mounted) return;
     setState(() {
-      for (var location in trashLocations) {
-        final LatLng coordinates = location['coordinates'] as LatLng;
-        final String name = location['name'] as String;
-        final String type = location['type'] as String;
-
-        BitmapDescriptor markerIcon;
-        if (type.toLowerCase().contains('bank sampah') ||
-            type.toLowerCase().contains('daur ulang')) {
-          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueGreen,
-          );
-        } else {
-          markerIcon = BitmapDescriptor.defaultMarkerWithHue(
-            BitmapDescriptor.hueRed,
-          );
-        }
-
-        _markers.add(
-          Marker(
-            markerId: MarkerId(name),
-            position: coordinates,
-            icon: markerIcon,
-            onTap: () async {
-              // coba ambil gambar dari Google Places API
-              String? photoRef;
-              try {
-                final url = Uri.parse(
-                  'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-                  '?location=${coordinates.latitude},${coordinates.longitude}'
-                  '&radius=50' // radius kecil
-                  '&key=$_apiKey',
-                );
-
-                final response = await http.get(url);
-                if (response.statusCode == 200) {
-                  final data = json.decode(response.body);
-                  final results = data['results'] as List?;
-                  if (results != null && results.isNotEmpty) {
-                    final photos = results.first['photos'] as List?;
-                    photoRef = photos != null && photos.isNotEmpty
-                        ? photos.first['photo_reference']
-                        : null;
-                  }
-                }
-              } catch (_) {
-                photoRef = null;
-              }
-
-              final imageUrl = _getPhotoUrl(
-                photoRef,
-              ); // fallback ke default otomatis
-
-              _drawRoute(coordinates, _currentPosition!, (distanceKm) {
-                _showInfoSheet(
-                  name: name,
-                  type: type,
-                  rating: location['rating'] as double,
-                  reviews: location['reviews'] as int,
-                  imageUrl: imageUrl,
-                  distanceInKm: distanceKm,
-                );
-              });
-            },
-          ),
-        );
-      }
+      _nearbyPlaces.sort((a, b) => a['distance'].compareTo(b['distance']));
     });
   }
 
-  // Tambah parameter distanceInKm di _showInfoSheet
+  // Menampilkan informasi resmi dari setiap lokasi marker
   void _showInfoSheet({
     required String name,
     required String type,
     required double rating,
     required int reviews,
     required String imageUrl,
-    required double distanceInKm,
+    required LatLng destination,
   }) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
+      isScrollControlled:
+          true, // Biarkan true agar sheet bisa muncul di atas keyboard
       builder: (BuildContext context) {
         return Container(
           padding: const EdgeInsets.all(20),
@@ -416,159 +274,211 @@ class _LocationPageState extends State<LocationPage> {
               topRight: Radius.circular(25),
             ),
           ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              ClipRRect(
-                borderRadius: BorderRadius.circular(15),
-                child: Image.network(
-                  imageUrl,
-                  fit: BoxFit.cover,
-                  height: 200,
-                  width: double.infinity,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Image.asset(
-                      'assets/images/bg_handling.png',
-                      fit: BoxFit.cover,
-                      height: 200,
-                      width: double.infinity,
-                    );
+          // Gunakan SingleChildScrollView agar konten bisa digulir jika terlalu panjang
+          child: SingleChildScrollView(
+            // Gunakan MainAxisSize.min agar Column hanya mengambil ruang vertikal sesuai kontennya
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Align(
+                  alignment: Alignment.center,
+                  child: Container(
+                    width: 75,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: Color(0xFFBABABA),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 15),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(15),
+                  child: Image.network(
+                    imageUrl,
+                    fit: BoxFit.cover,
+                    height: 200,
+                    width: double.infinity,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Image.asset(
+                        'assets/images/default_location.png',
+                        fit: BoxFit.cover,
+                        height: 200,
+                        width: double.infinity,
+                      );
+                    },
+                  ),
+                ),
+                const SizedBox(height: 15),
+                Text(
+                  name,
+                  style: const TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.bold,
+                    fontFamily: 'Nunito',
+                    color: AppColors.darkMossGreen,
+                  ),
+                ),
+                const SizedBox(height: 5),
+                Row(
+                  children: [
+                    _buildRatingStars(rating),
+                    const SizedBox(width: 10),
+                    Text(
+                      '$rating ($reviews ulasan)',
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                Text(
+                  'Jenis: $type',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[800],
+                    fontFamily: 'Roboto',
+                  ),
+                ),
+                const SizedBox(height: 10),
+                ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.fernGreen,
+                    foregroundColor: AppColors.whiteSmoke,
+                    minimumSize: const Size.fromHeight(50),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(15),
+                    ),
+                  ),
+                  onPressed: () {
+                    Navigator.pop(context);
+                    _drawRoute(destination, _currentPosition!, name, (
+                      distance,
+                      duration,
+                      points,
+                    ) {
+                      setState(() {
+                        _polylines = {
+                          Polyline(
+                            polylineId: const PolylineId('route'),
+                            points: points,
+                            color: AppColors.fernGreen,
+                            width: 5,
+                          ),
+                        };
+                        _distanceInKm = distance;
+                        _durationText = duration;
+                        _destinationName = name;
+                      });
+                    });
                   },
-                ),
-              ),
-              const SizedBox(height: 15),
-              Text(
-                name,
-                style: const TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  fontFamily: 'Nunito',
-                ),
-              ),
-              const SizedBox(height: 5),
-              Row(
-                children: [
-                  _buildRatingStars(rating),
-                  const SizedBox(width: 10),
-                  Text(
-                    '$rating ($reviews ulasan)',
+                  child: const Text(
+                    'Lihat Rute',
                     style: TextStyle(
-                      fontSize: 14,
-                      color: Colors.grey[600],
+                      color: AppColors.whiteSmoke, // Warna teks yang sama
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
                       fontFamily: 'Nunito',
                     ),
                   ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Jenis: $type',
-                style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.grey[800],
-                  fontFamily: 'Nunito',
                 ),
-              ),
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  const Icon(Icons.directions_car, color: Colors.blue),
-                  const SizedBox(width: 5),
-                  Text(
-                    'Jarak: ${distanceInKm.toStringAsFixed(2)} km',
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ],
-              ),
-            ],
+              ],
+            ),
           ),
         );
       },
     );
   }
 
+  // Menggambar rute dari lokasi terkini pengguna ke lokasi tujuan (marker)
   final PolylinePoints polylinePoints = PolylinePoints();
 
   Future<void> _drawRoute(
     LatLng destination,
     LatLng origin,
-    Function(double) onDistanceCalculated,
+    String destinationName,
+    Function(double, String, List<LatLng>) onRouteCalculated,
   ) async {
     try {
-      PolylineResult result = await polylinePoints.getRouteBetweenCoordinates(
-        googleApiKey: _apiKey,
-        request: PolylineRequest(
-          origin: PointLatLng(origin.latitude, origin.longitude),
-          destination: PointLatLng(destination.latitude, destination.longitude),
-          mode: TravelMode.driving,
-        ),
+      final directionsUrl = Uri.parse(
+        'https://maps.googleapis.com/maps/api/directions/json'
+        '?origin=${origin.latitude},${origin.longitude}'
+        '&destination=${destination.latitude},${destination.longitude}'
+        '&mode=driving'
+        '&key=$_apiKey',
       );
 
-      debugPrint('Status: ${result.status}');
-      debugPrint('Error: ${result.errorMessage}');
-      debugPrint('Jumlah titik rute: ${result.points.length}');
+      final response = await http.get(directionsUrl);
 
-      if (result.points.isNotEmpty) {
-        // decode polyline
-        final route = result.points
-            .map((p) => LatLng(p.latitude, p.longitude))
-            .toList();
+      if (response.statusCode == 200) {
+        final data = json.decode(response.body);
+        if (data['routes'] != null && data['routes'].isNotEmpty) {
+          final route = data['routes'][0];
+          final leg = route['legs'][0];
+          final overviewPolyline = route['overview_polyline']['points'];
 
-        // hitung jarak total
-        double totalDistance = 0;
-        for (int i = 0; i < route.length - 1; i++) {
-          totalDistance += Geolocator.distanceBetween(
-            route[i].latitude,
-            route[i].longitude,
-            route[i + 1].latitude,
-            route[i + 1].longitude,
+          final distance = leg['distance']['value'] / 1000.0;
+          final duration = leg['duration']['text'];
+
+          final polylinePointsResult = polylinePoints.decodePolyline(
+            overviewPolyline,
           );
+          final routePoints = polylinePointsResult
+              .map((p) => LatLng(p.latitude, p.longitude))
+              .toList();
+
+          onRouteCalculated(distance, duration, routePoints);
+        } else {
+          debugPrint('No route found from API. Falling back to direct line.');
+          final fallbackDistance =
+              Geolocator.distanceBetween(
+                origin.latitude,
+                origin.longitude,
+                destination.latitude,
+                destination.longitude,
+              ) /
+              1000;
+          const fallbackDuration = 'N/A';
+          final fallbackPoints = [origin, destination];
+          onRouteCalculated(fallbackDistance, fallbackDuration, fallbackPoints);
         }
-
-        onDistanceCalculated(totalDistance / 1000);
-
-        setState(() {
-          _polylines = {
-            Polyline(
-              polylineId: const PolylineId('route'),
-              points: route,
-              color: Colors.redAccent,
-              width: 5,
-            ),
-          };
-        });
       } else {
-        // fallback ke garis lurus kalau rute gagal
-        double fallbackDistance = Geolocator.distanceBetween(
-          origin.latitude,
-          origin.longitude,
-          destination.latitude,
-          destination.longitude,
+        debugPrint(
+          'Error getting directions: ${response.statusCode}, ${response.body}',
         );
-        debugPrint('Fallback distance dipakai: $fallbackDistance m');
-        onDistanceCalculated(fallbackDistance / 1000);
-
-        setState(() {
-          _polylines = {
-            Polyline(
-              polylineId: const PolylineId('fallback'),
-              points: [origin, destination],
-              color: Colors.blueGrey,
-              width: 3,
-            ),
-          };
-        });
+        final fallbackDistance =
+            Geolocator.distanceBetween(
+              origin.latitude,
+              origin.longitude,
+              destination.latitude,
+              destination.longitude,
+            ) /
+            1000;
+        const fallbackDuration = 'N/A';
+        final fallbackPoints = [origin, destination];
+        onRouteCalculated(fallbackDistance, fallbackDuration, fallbackPoints);
       }
     } catch (e) {
-      debugPrint('Error getting route: $e');
-      onDistanceCalculated(0);
+      debugPrint('Exception getting route: $e');
+      final fallbackDistance =
+          Geolocator.distanceBetween(
+            origin.latitude,
+            origin.longitude,
+            destination.latitude,
+            destination.longitude,
+          ) /
+          1000;
+      const fallbackDuration = 'N/A';
+      final fallbackPoints = [origin, destination];
+      onRouteCalculated(fallbackDistance, fallbackDuration, fallbackPoints);
     }
   }
 
+  // Rating setiap lokasi
   Widget _buildRatingStars(double rating) {
     List<Widget> stars = [];
     int fullStars = rating.floor();
@@ -585,6 +495,120 @@ class _LocationPageState extends State<LocationPage> {
       stars.add(const Icon(Icons.star_border, color: Colors.amber, size: 20));
     }
     return Row(children: stars);
+  }
+
+  void _updateSuggestions(String query) {
+    if (query.isEmpty) {
+      setState(() {
+        _searchSuggestions = [];
+      });
+      return;
+    }
+
+    // Kosongkan daftar saran sebelum mengisinya
+    _searchSuggestions.clear();
+
+    final filteredPlaces = _nearbyPlaces
+        .where((place) =>
+            (place['name'] as String).toLowerCase().contains(query.toLowerCase()))
+        .toList();
+
+    final uniqueSuggestions = filteredPlaces
+        .map((place) => {
+              'name': '${place['name']} (${(place['distance'] as double).toStringAsFixed(1)} km)',
+              'place_id': place['place_id'],
+            })
+        .toSet()
+        .toList();
+
+    setState(() {
+      _searchSuggestions = uniqueSuggestions;
+    });
+  }
+
+  // Ubah parameter dari 'query' menjadi 'placeId'
+  void _performSearch(String placeId) {
+    if (!mounted) return;
+    
+    final place = _nearbyPlaces.firstWhere(
+      (p) => p['place_id'] == placeId,
+      orElse: () => {},
+    );
+
+    if (place.isNotEmpty) {
+      final destination = place['location'] as LatLng;
+      final destinationName = place['name'] as String;
+
+      _mapController?.animateCamera(CameraUpdate.newLatLng(destination));
+      
+      setState(() {
+        _polylines.clear();
+      });
+
+      _drawRoute(destination, _currentPosition!, destinationName, (
+        distance,
+        duration,
+        points,
+      ) {
+        if (!mounted) return;
+        setState(() {
+          _polylines = {
+            Polyline(
+              polylineId: const PolylineId('route'),
+              points: points,
+              color: AppColors.fernGreen,
+              width: 5,
+            ),
+          };
+          _distanceInKm = distance;
+          _durationText = duration;
+          _destinationName = destinationName;
+        });
+      });
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          // Konten SnackBar: ikon dan teks
+          content: Row(
+            children: const [
+              // Ikon peringatan
+              Icon(Icons.error_outline, color: Colors.white, size: 20),
+              SizedBox(width: 10), // Jarak antara ikon dan teks
+              // Teks pesan
+              Text(
+                'Lokasi tidak ditemukan!',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Roboto'
+                ),
+              ),
+            ],
+          ),
+          
+          // Warna latar belakang SnackBar
+          backgroundColor: Colors.red.shade700,
+          
+          // Durasi SnackBar ditampilkan
+          duration: const Duration(seconds: 3),
+          
+          // Perilaku SnackBar: floating agar muncul di tengah bawah dan tidak selebar layar
+          behavior: SnackBarBehavior.floating,
+          
+          // Bentuk SnackBar: sudut membulat
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(15), // Sesuaikan radius untuk kelengkungan sudut
+          ),
+          
+          // Margin dari tepi layar (opsional, untuk tampilan yang lebih "mengambang")
+          margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+          
+          // Padding internal di dalam SnackBar (opsional, bisa diatur lewat content juga)
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        ),
+      );
+    }
   }
 
   @override
@@ -621,9 +645,7 @@ class _LocationPageState extends State<LocationPage> {
                 child: Icon(Icons.location_on, color: AppColors.whiteSmoke),
               ),
             ),
-
             const SizedBox(width: 10),
-
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -650,21 +672,64 @@ class _LocationPageState extends State<LocationPage> {
         ),
       ),
       body: _currentPosition == null
-          ? const Center(child: CircularProgressIndicator())
+          ? const Center(
+              child: CircularProgressIndicator(color: AppColors.fernGreen),
+            )
           : Stack(
               children: [
-                // Layer 1: Google Map, yang akan menempati seluruh ruang
                 GoogleMap(
                   initialCameraPosition: initialCameraPosition,
                   markers: _markers,
                   polylines: _polylines,
+                  circles: _circles,
                   onMapCreated: (controller) => _mapController = controller,
                   myLocationEnabled: true,
                   myLocationButtonEnabled: false,
                   compassEnabled: false,
                 ),
+                if (_searchSuggestions.isNotEmpty) // Tampilkan hanya jika ada saran
+                  Positioned(
+                    top: 75, // Posisi dari atas
+                    left: 16,
+                    right: 16,
+                    child: Container(
+                      // Atur batas tinggi maksimum di sini
+                      constraints: BoxConstraints(
+                        maxHeight: MediaQuery.of(context).size.height * 0.7, // Contoh: maks 70% tinggi layar
+                      ),
+                      margin: EdgeInsets.only(bottom: 20 + MediaQuery.of(context).viewInsets.bottom),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withAlpha((255 * 0.1).round()),
+                            blurRadius: 5,
+                            offset: const Offset(0, 3),
+                          ),
+                        ],
+                      ),
+                      child: ListView.builder(
+                        shrinkWrap: true,
+                        itemCount: _searchSuggestions.length,
+                        itemBuilder: (context, index) {
+                          final suggestion = _searchSuggestions[index];
+                          final placeName = suggestion['name'] as String;
+                          final placeId = suggestion['place_id'] as String;
 
-                // Layer 2: Search bar, yang akan melayang di atas peta
+                          return ListTile(
+                            title: Text(placeName),
+                            onTap: () {
+                              _performSearch(placeId);
+                              setState(() {
+                                _searchSuggestions = [];
+                              });
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                  ),
                 Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16.0,
@@ -685,7 +750,6 @@ class _LocationPageState extends State<LocationPage> {
                     ),
                     child: TextField(
                       controller: _searchController,
-                      // Teks inputan user
                       style: const TextStyle(
                         fontFamily: 'Roboto',
                         fontSize: 14,
@@ -693,7 +757,6 @@ class _LocationPageState extends State<LocationPage> {
                       ),
                       decoration: InputDecoration(
                         hintText: 'Cari lokasi',
-                        // Teke placeholder
                         hintStyle: const TextStyle(
                           fontFamily: 'Roboto',
                           fontSize: 14,
@@ -705,60 +768,34 @@ class _LocationPageState extends State<LocationPage> {
                           horizontal: 12,
                         ),
                         prefixIcon: Padding(
-                          padding: const EdgeInsets.only(
-                            left: 12,
-                            right: 8,
-                          ), // geser ke dalam
+                          padding: const EdgeInsets.only(left: 12, right: 8),
                           child: Icon(Icons.search, color: AppColors.fernGreen),
                         ),
                         prefixIconConstraints: const BoxConstraints(
                           minWidth: 40,
                           minHeight: 40,
                         ),
-                        // tambahin kalau nanti ada suffixIcon
                         suffixIconConstraints: const BoxConstraints(
                           minWidth: 40,
                           minHeight: 40,
                         ),
                       ),
+                      onChanged: _updateSuggestions,
                       onSubmitted: (value) {
-                        final marker = _markers.firstWhere(
-                          (m) => (m.infoWindow.title ?? '')
-                              .toLowerCase()
-                              .contains(value.toLowerCase()),
-                          orElse: () => const Marker(
-                            markerId: MarkerId('null'),
-                            position: LatLng(0, 0),
-                          ),
-                        );
-                        if (marker.markerId.value != 'null') {
-                          _mapController?.animateCamera(
-                            CameraUpdate.newLatLng(marker.position),
-                          );
-                          _drawRoute(marker.position, _currentPosition!, (
-                            distanceKm,
-                          ) {
-                            setState(() {
-                              _distanceInKm = distanceKm;
-                              _destinationName = marker.infoWindow.title;
-                            });
-                          });
-                        } else {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Lokasi tidak ditemukan'),
-                            ),
-                          );
-                        }
+                        _performSearch(value);
+                        // Sembunyikan saran setelah pencarian
+                        _searchSuggestions = [];
+                      },
+                      onTap: () {
+                        // Tampilkan kembali saran jika ada teks
+                        _updateSuggestions(_searchController.text);
                       },
                     ),
                   ),
                 ),
-
-                // Layer 3: Kotak info jarak, yang juga melayang di atas peta
-                if (_distanceInKm != null && _destinationName != null)
+                if (_distanceInKm != null && _durationText != null)
                   Positioned(
-                    bottom: 20,
+                    bottom: 100,
                     left: 10,
                     right: 10,
                     child: Container(
@@ -774,27 +811,55 @@ class _LocationPageState extends State<LocationPage> {
                           ),
                         ],
                       ),
-                      child: Row(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.directions_car, color: Colors.blue),
-                          const SizedBox(width: 10),
-                          Expanded(
-                            child: Text(
-                              'Jarak ke $_destinationName: ${_distanceInKm!.toStringAsFixed(2)} km',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Flexible(
+                                child: Text(
+                                  'Rute ke $_destinationName',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                  softWrap: true,
+                                ),
                               ),
-                            ),
+                              IconButton(
+                                icon: const Icon(Icons.close),
+                                onPressed: () {
+                                  setState(() {
+                                    _polylines.clear();
+                                    _distanceInKm = null;
+                                    _durationText = null;
+                                    _destinationName = null;
+                                  });
+                                },
+                              ),
+                            ],
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() {
-                                _polylines.clear();
-                                _distanceInKm = null;
-                                _destinationName = null;
-                              });
-                            },
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.directions_car,
+                                color: Colors.blue,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                '${_distanceInKm!.toStringAsFixed(2)} km',
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                              const SizedBox(width: 15),
+                              const Icon(Icons.access_time, color: Colors.blue),
+                              const SizedBox(width: 5),
+                              Text(
+                                _durationText!,
+                                style: const TextStyle(fontSize: 14),
+                              ),
+                            ],
                           ),
                         ],
                       ),

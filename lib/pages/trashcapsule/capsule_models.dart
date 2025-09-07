@@ -10,7 +10,7 @@ extension CapsuleScenarioX on CapsuleScenario {
   String get wire => this == CapsuleScenario.good ? 'good' : 'bad';
 }
 
-/// Satu kartu dampak
+/// Satu kartu/cerita dampak
 class CapsuleItem {
   final String title;
   final String description;
@@ -39,13 +39,18 @@ class CapsuleItem {
       };
 }
 
-/// Paket hasil generator (5 item + seed + status)
+/// Paket hasil generator
 class CapsuleResult {
   final List<CapsuleItem> items;
   final String seed;
 
-  /// true jika Edge Function sukses menghasilkan gambar/narasi.
+  /// success = "hasil akhir dipakai untuk hitung limit"
+  /// Dengan logika baru: success=true hanya jika textSuccess && imageSuccess.
   final bool success;
+
+  /// Rinciannya:
+  final bool? textSuccess;  // true bila narasi dari server berhasil
+  final bool? imageSuccess; // true bila gambar benar-benar dibuat
 
   /// Pesan error dari function (kalau ada).
   final String? errorMessage;
@@ -54,16 +59,20 @@ class CapsuleResult {
     required this.items,
     required this.seed,
     required this.success,
+    this.textSuccess,
+    this.imageSuccess,
     this.errorMessage,
   });
 
   factory CapsuleResult.fromJson(Map<String, dynamic> j) => CapsuleResult(
-        items: (j['items'] as List)
+        items: (j['items'] as List? ?? const [])
             .cast<Map<String, dynamic>>()
             .map(CapsuleItem.fromJson)
             .toList(),
         seed: (j['seed'] as String?) ?? 'local-fallback',
-        success: (j['success'] as bool?) ?? true,
+        success: (j['success'] as bool?) ?? false,
+        textSuccess: j['textSuccess'] as bool?,
+        imageSuccess: j['imageSuccess'] as bool?,
         errorMessage: j['errorMessage'] as String?,
       );
 
@@ -71,6 +80,8 @@ class CapsuleResult {
         'items': items.map((e) => e.toJson()).toList(),
         'seed': seed,
         'success': success,
+        if (textSuccess != null) 'textSuccess': textSuccess,
+        if (imageSuccess != null) 'imageSuccess': imageSuccess,
         if (errorMessage != null) 'errorMessage': errorMessage,
       };
 }
