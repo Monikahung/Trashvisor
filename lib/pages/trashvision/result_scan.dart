@@ -11,11 +11,7 @@ class ResultScan extends StatefulWidget {
   final String? scannedImagePath;
   final Map<String, dynamic>? aiResult;
 
-  const ResultScan({
-    super.key,
-    this.scannedImagePath,
-    this.aiResult,
-  });
+  const ResultScan({super.key, this.scannedImagePath, this.aiResult});
 
   @override
   State<ResultScan> createState() => _ResultScanState();
@@ -25,6 +21,7 @@ class _ResultScanState extends State<ResultScan> {
   String? _currentImagePath;
   String _predictedLabel = "Tidak teridentifikasi";
   String _predictedConfidence = "0.0%";
+  bool _isErrorResult = false;
 
   @override
   void initState() {
@@ -57,7 +54,65 @@ class _ResultScanState extends State<ResultScan> {
       _predictedLabel = topPrediction.key.replaceAll('_', ' ');
       double confidence = topPrediction.value;
       _predictedConfidence = '${(confidence * 100).toStringAsFixed(2)}%';
+
+      // Check for error condition
+      if (_predictedLabel.toLowerCase() == "error" || confidence < 0.01) {
+        _isErrorResult = true;
+        // Jadwalkan hitungan mundur untuk dimulai setelah frame selesai di-render
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          _startCountdown();
+        });
+      }
+    } else {
+      _isErrorResult = true;
+      // Jadwalkan hitungan mundur untuk dimulai setelah frame selesai di-render
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _startCountdown();
+      });
     }
+  }
+
+  // Hitung mundur kembali ke Scan Camera jika hasil deteksi error (0.00%)
+  void _startCountdown() {
+    // Show a SnackBar with a countdown message
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Row(
+          children: const [
+            // Ikon peringatan
+            Icon(Icons.error_outline, color: Colors.white, size: 20),
+            SizedBox(width: 10),
+            // Teks pesan
+            Expanded(
+              child: Text(
+                'Hasil tidak teridentifikasi. Kembali dalam 5 detik...',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Roboto',
+                ),
+              ),
+            ),
+          ],
+        ),
+        duration: const Duration(seconds: 5),
+        backgroundColor: Colors.red.shade700,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(15)
+        ),
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      ),
+    );
+
+    // Navigate back to ScanCamera after 5 seconds
+    Future.delayed(const Duration(seconds: 5), () {
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    });
   }
 
   Future<void> _startScanCamera() async {
@@ -74,7 +129,7 @@ class _ResultScanState extends State<ResultScan> {
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ScanCamera(cameras: cameras),
+        builder: (context) => ScanCamera(cameras: cameras)
       ),
     );
 
@@ -88,7 +143,8 @@ class _ResultScanState extends State<ResultScan> {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-              content: Text('Gagal menampilkan gambar. File tidak ditemukan.')),
+            content: Text('Gagal menampilkan gambar. File tidak ditemukan.'),
+          ),
         );
         return;
       }
@@ -158,8 +214,11 @@ class _ResultScanState extends State<ResultScan> {
                         color: AppColors.fernGreen,
                         shape: BoxShape.circle,
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new,
-                          color: AppColors.whiteSmoke, size: 20),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        color: AppColors.whiteSmoke,
+                        size: 20,
+                      ),
                     ),
                   ),
                 ),
@@ -176,8 +235,9 @@ class _ResultScanState extends State<ResultScan> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color:
-                          AppColors.fernGreen.withAlpha((255 * 0.15).round()),
+                      color: AppColors.fernGreen.withAlpha(
+                        (255 * 0.15).round(),
+                      ),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.fernGreen, width: 1),
                     ),
@@ -224,37 +284,45 @@ class _ResultScanState extends State<ResultScan> {
                                   ),
                                 ),
                                 const SizedBox(height: 5),
-                                GestureDetector(
-                                  onTap: () {
-                                    // Navigasi ke halaman chatbot yang ingin dikirim
-                                    final String trashType = _predictedLabel;
-                                    final String question = "Tolong berikan informasi lebih detail mengenai sampah $trashType!";
-                                      
-                                    // Navigasi ke halaman chatbot dan teruskan pertanyaan
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => TrashChatbotPage(initialQuestion: question),
+                                // Disable tombol "Tanya Trash Chatbot jika hasilnya error (0.00%)"
+                                Opacity(
+                                  opacity: _isErrorResult ? 0.5 : 1.0,
+                                  child: AbsorbPointer(
+                                    absorbing: _isErrorResult,
+                                    child: GestureDetector(
+                                      onTap: () {
+                                        final String trashType =
+                                            _predictedLabel;
+                                        final String question =
+                                            "Tolong berikan informasi lebih detail mengenai sampah $trashType!";
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (context) =>
+                                                TrashChatbotPage(
+                                                    initialQuestion: question),
+                                          ),
+                                        );
+                                      },
+                                      child: Row(
+                                        children: const [
+                                          Text(
+                                            'Tanya Trash Chatbot!',
+                                            style: TextStyle(
+                                              fontFamily: 'Nunito',
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.bold,
+                                              color: AppColors.fernGreen,
+                                            ),
+                                          ),
+                                          Icon(
+                                            Icons.arrow_forward_ios,
+                                            size: 12,
+                                            color: AppColors.fernGreen,
+                                          ),
+                                        ],
                                       ),
-                                    );
-                                  },
-                                  child: Row(
-                                    children: const [
-                                      Text(
-                                        'Tanya Trash Chatbot!',
-                                        style: TextStyle(
-                                          fontFamily: 'Nunito',
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.bold,
-                                          color: AppColors.fernGreen,
-                                        ),
-                                      ),
-                                      Icon(
-                                        Icons.arrow_forward_ios,
-                                        size: 12,
-                                        color: AppColors.fernGreen,
-                                      ),
-                                    ],
+                                    ),
                                   ),
                                 ),
                               ],
@@ -280,43 +348,51 @@ class _ResultScanState extends State<ResultScan> {
                   const SizedBox(height: 16),
                   Container(
                     height: 1,
-                    color: AppColors.darkMossGreen
-                        .withAlpha((255 * 0.5).round()),
+                    color: AppColors.darkMossGreen.withAlpha(
+                      (255 * 0.5).round(),
+                    ),
                     width: double.infinity,
                   ),
                   const SizedBox(height: 24),
                   _buildInfoCard(
                     title: 'Saran\nPenanganan',
                     imagePath: 'assets/images/info_1.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => HandlingTrash(
-                            trashType: _predictedLabel,
-                          ),
-                        ),
-                      );
-                    },
+                    onTap: _isErrorResult
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => HandlingTrash(
+                                  trashType: _predictedLabel,
+                                ),
+                              ),
+                            );
+                          },
+                    isError: _isErrorResult,
                   ),
                   const SizedBox(height: 16),
                   _buildInfoCard(
                     title: 'Trash\nCapsule',
                     imagePath: 'assets/images/info_2.png',
-                    onTap: () {},
+                    onTap: _isErrorResult ? null : () {},
+                    isError: _isErrorResult,
                   ),
                   const SizedBox(height: 16),
                   _buildInfoCard(
                     title: 'Trash\nLocation',
                     imagePath: 'assets/images/info_3.png',
-                    onTap: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(
-                          builder: (context) => TrashLocation(),
-                        ),
-                      );
-                    },
+                    onTap: _isErrorResult
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TrashLocation(),
+                              ),
+                            );
+                          },
+                    isError: _isErrorResult,
                   ),
                 ],
               ),
@@ -327,8 +403,10 @@ class _ResultScanState extends State<ResultScan> {
       floatingActionButton: FloatingActionButton(
         onPressed: _startScanCamera,
         backgroundColor: AppColors.fernGreen,
-        child: const Icon(Icons.camera_alt_outlined,
-            color: AppColors.whiteSmoke),
+        child: const Icon(
+          Icons.camera_alt_outlined,
+          color: AppColors.whiteSmoke,
+        ),
       ),
     );
   }
@@ -336,76 +414,79 @@ class _ResultScanState extends State<ResultScan> {
   Widget _buildInfoCard({
     required String title,
     required String imagePath,
-    required VoidCallback onTap,
+    required VoidCallback? onTap,
+    required bool isError,
   }) {
-    return Container(
-      padding: const EdgeInsets.only(left: 16),
-      decoration: BoxDecoration(
-        color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: AppColors.fernGreen, width: 1),
-      ),
-      child: IntrinsicHeight(
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.only(top: 10),
-                    child: Text(
-                      title,
-                      style: const TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.darkMossGreen,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 10),
-                    child: ElevatedButton(
-                      onPressed: onTap,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.fernGreen,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 16, vertical: 10),
-                      ),
-                      child: const Text(
-                        'Selengkapnya',
-                        style: TextStyle(
+    return Opacity(
+      opacity: isError ? 0.5 : 1.0,
+      child: Container(
+        padding: const EdgeInsets.only(left: 16),
+        decoration: BoxDecoration(
+          color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.fernGreen, width: 1),
+        ),
+        child: IntrinsicHeight(
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 10),
+                      child: Text(
+                        title,
+                        style: const TextStyle(
                           fontFamily: 'Nunito',
-                          fontSize: 14,
-                          color: AppColors.whiteSmoke,
+                          fontSize: 18,
                           fontWeight: FontWeight.bold,
+                          color: AppColors.darkMossGreen,
                         ),
                       ),
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 6),
+                    Container(
+                      margin: const EdgeInsets.only(bottom: 10),
+                      child: ElevatedButton(
+                        onPressed: onTap,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.fernGreen,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 16, vertical: 10),
+                        ),
+                        child: const Text(
+                          'Selengkapnya',
+                          style: TextStyle(
+                            fontFamily: 'Nunito',
+                            fontSize: 14,
+                            color: AppColors.whiteSmoke,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            ),
-            // Ini adalah Kolom Kanan (Gambar)
-            ClipRRect(
-              borderRadius: const BorderRadius.only(
-                topRight: Radius.circular(20),
-                bottomRight: Radius.circular(20),
+              ClipRRect(
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(20),
+                  bottomRight: Radius.circular(20),
+                ),
+                child: Image.asset(
+                  imagePath,
+                  fit: BoxFit.cover,
+                  width: 130,
+                ),
               ),
-              child: Image.asset(
-                imagePath,
-                fit: BoxFit.cover, // Gunakan BoxFit.cover agar gambar mengisi area
-                width: 130, // Tentukan lebar tetap untuk gambar (Anda bisa sesuaikan)
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
