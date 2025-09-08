@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:dio/dio.dart'; // import package dio
-import 'package:flutter/foundation.dart'; // import untuk menggunakan compute()
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:trashvisor/core/colors.dart';
 import 'guide_camera.dart';
 import 'result_scan.dart';
@@ -10,7 +10,7 @@ import 'result_scan.dart';
 // Fungsi upload gambar ke Hugging Face
 Future<Map<String, dynamic>?> _sendImageToHuggingFace(String imagePath) async {
   final dio = Dio();
-  const url = 'https://monikahung-yolo-trash-endpoint.hf.space/predict'; // endpoint dari HF
+  const url = 'https://monikahung-yolo-trash-endpoint.hf.space/predict';
 
   final formData = FormData.fromMap({
     'file': await MultipartFile.fromFile(imagePath, filename: 'upload.png'),
@@ -21,9 +21,7 @@ Future<Map<String, dynamic>?> _sendImageToHuggingFace(String imagePath) async {
     final response = await dio.post(
       url,
       data: formData,
-      options: Options(
-        headers: {'Content-Type': 'multipart/form-data'},
-      ),
+      options: Options(headers: {'Content-Type': 'multipart/form-data'}),
     );
 
     debugPrint("Response status: ${response.statusCode}");
@@ -45,7 +43,6 @@ Future<Map<String, dynamic>?> _sendImageToHuggingFace(String imagePath) async {
 
 class ScanCamera extends StatefulWidget {
   final List<CameraDescription> cameras;
-
   const ScanCamera({super.key, required this.cameras});
 
   @override
@@ -89,14 +86,10 @@ class _ScanCameraState extends State<ScanCamera> {
 
   Future<void> _toggleFlash() async {
     if (!_controller.value.isInitialized) return;
-
     final nextFlashMode = _flashMode == FlashMode.off ? FlashMode.torch : FlashMode.off;
-
     try {
       await _controller.setFlashMode(nextFlashMode);
-      setState(() {
-        _flashMode = nextFlashMode;
-      });
+      setState(() => _flashMode = nextFlashMode);
     } on CameraException catch (e) {
       debugPrint('Error saat mengubah flash mode: $e');
     }
@@ -116,7 +109,6 @@ class _ScanCameraState extends State<ScanCamera> {
     setState(() => _isLoading = false);
 
     if (result != null) {
-      // Navigasi ke ResultScan tanpa dispose kamera dulu
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -150,7 +142,6 @@ class _ScanCameraState extends State<ScanCamera> {
       setState(() => _isLoading = false);
 
       if (result != null) {
-        // Navigasi ke ResultScan tanpa dispose kamera dulu
         Navigator.pushReplacement(
           context,
           MaterialPageRoute(
@@ -240,12 +231,15 @@ class _ScanCameraState extends State<ScanCamera> {
                 padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Row(
                   children: [
-                    Text('Panduan',
-                        style: TextStyle(
-                            fontFamily: 'Nunito',
-                            fontSize: 14,
-                            color: AppColors.fernGreen,
-                            fontWeight: FontWeight.bold)),
+                    Text(
+                      'Panduan',
+                      style: TextStyle(
+                        fontFamily: 'Nunito',
+                        fontSize: 14,
+                        color: AppColors.fernGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                     SizedBox(width: 8),
                     Icon(Icons.help, color: AppColors.fernGreen, size: 20),
                   ],
@@ -290,7 +284,9 @@ class _ScanCameraState extends State<ScanCamera> {
     return Container(
       color: AppColors.whiteSmoke,
       padding: EdgeInsets.symmetric(
-          vertical: screenHeight * 0.05, horizontal: screenWidth * 0.1),
+        vertical: screenHeight * 0.05,
+        horizontal: screenWidth * 0.1,
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -313,15 +309,19 @@ class _ScanCameraState extends State<ScanCamera> {
                   shape: BoxShape.circle,
                   color: AppColors.fernGreen,
                 ),
-                child: InkWell(onTap: _takePicture, borderRadius: BorderRadius.circular(55 / 2)),
+                child: InkWell(
+                  onTap: _takePicture,
+                  borderRadius: BorderRadius.circular(55 / 2),
+                ),
               ),
             ),
           ),
           IconButton(
             icon: Icon(
-                _flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
-                color: AppColors.fernGreen,
-                size: 30),
+              _flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
+              color: AppColors.fernGreen,
+              size: 30,
+            ),
             onPressed: _toggleFlash,
           ),
         ],
