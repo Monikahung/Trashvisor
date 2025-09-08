@@ -1,3 +1,12 @@
+// File: lib/pages/trashvision/result_scan.dart
+//
+// Layar hasil scan kamera (TIDAK DIUBAH strukturnya), hanya:
+// - Tambah import TrashCapsuleInline
+// - Kartu "Trash Capsule" -> onTap navigate ke TrashCapsuleInline(wasteType: _predictedLabel)
+// - Back dari TrashCapsuleInline akan pop kembali ke sini.
+//
+// Catatan: _predictedLabel sudah dihumanize (ganti '_' menjadi ' ') di initState().
+
 import 'package:flutter/material.dart';
 import 'dart:io';
 import 'package:trashvisor/core/colors.dart';
@@ -6,6 +15,9 @@ import 'package:trashvisor/pages/trashvision/handling_trash.dart';
 import 'package:trashvisor/pages/trashchatbot/chatbot.dart';
 import 'package:trashvisor/pages/trashvision/trash_location.dart';
 import 'scan_camera.dart';
+
+// >>> Tambahan: import layar capsule gabungan
+import 'package:trashvisor/pages/trashvision/trash_capsule_inline.dart';
 
 class ResultScan extends StatefulWidget {
   final String? scannedImagePath;
@@ -58,14 +70,12 @@ class _ResultScanState extends State<ResultScan> {
       // Check for error condition
       if (_predictedLabel.toLowerCase() == "error" || confidence < 0.01) {
         _isErrorResult = true;
-        // Jadwalkan hitungan mundur untuk dimulai setelah frame selesai di-render
         WidgetsBinding.instance.addPostFrameCallback((_) {
           _startCountdown();
         });
       }
     } else {
       _isErrorResult = true;
-      // Jadwalkan hitungan mundur untuk dimulai setelah frame selesai di-render
       WidgetsBinding.instance.addPostFrameCallback((_) {
         _startCountdown();
       });
@@ -74,15 +84,12 @@ class _ResultScanState extends State<ResultScan> {
 
   // Hitung mundur kembali ke Scan Camera jika hasil deteksi error (0.00%)
   void _startCountdown() {
-    // Show a SnackBar with a countdown message
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Row(
           children: const [
-            // Ikon peringatan
             Icon(Icons.error_outline, color: Colors.white, size: 20),
             SizedBox(width: 10),
-            // Teks pesan
             Expanded(
               child: Text(
                 'Hasil tidak teridentifikasi. Kembali dalam 5 detik...',
@@ -97,17 +104,14 @@ class _ResultScanState extends State<ResultScan> {
           ],
         ),
         duration: const Duration(seconds: 5),
-        backgroundColor: Colors.red.shade700,
+        backgroundColor: Colors.redAccent,
         behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(15)
-        ),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15)),
         margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       ),
     );
 
-    // Navigate back to ScanCamera after 5 seconds
     Future.delayed(const Duration(seconds: 5), () {
       if (mounted) {
         Navigator.pop(context);
@@ -128,9 +132,7 @@ class _ResultScanState extends State<ResultScan> {
 
     final result = await Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => ScanCamera(cameras: cameras)
-      ),
+      MaterialPageRoute(builder: (context) => ScanCamera(cameras: cameras)),
     );
 
     if (!mounted) return;
@@ -142,9 +144,7 @@ class _ResultScanState extends State<ResultScan> {
       if (!await file.exists()) {
         if (!mounted) return;
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Gagal menampilkan gambar. File tidak ditemukan.'),
-          ),
+          const SnackBar(content: Text('Gagal menampilkan gambar. File tidak ditemukan.')),
         );
         return;
       }
@@ -235,9 +235,7 @@ class _ResultScanState extends State<ResultScan> {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: AppColors.fernGreen.withAlpha(
-                        (255 * 0.15).round(),
-                      ),
+                      color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
                       borderRadius: BorderRadius.circular(20),
                       border: Border.all(color: AppColors.fernGreen, width: 1),
                     ),
@@ -251,14 +249,8 @@ class _ResultScanState extends State<ResultScan> {
                               width: 82.5,
                               height: 82.5,
                               child: _currentImagePath != null
-                                  ? Image.file(
-                                      File(_currentImagePath!),
-                                      fit: BoxFit.cover,
-                                    )
-                                  : Image.asset(
-                                      'assets/images/bg_home.jpg',
-                                      fit: BoxFit.cover,
-                                    ),
+                                  ? Image.file(File(_currentImagePath!), fit: BoxFit.cover)
+                                  : Image.asset('assets/images/bg_home.jpg', fit: BoxFit.cover),
                             ),
                           ),
                           const SizedBox(width: 16),
@@ -266,9 +258,9 @@ class _ResultScanState extends State<ResultScan> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
+                                const Text(
                                   'Sampah ini termasuk jenis sampah:',
-                                  style: const TextStyle(
+                                  style: TextStyle(
                                     fontFamily: 'Roboto',
                                     fontSize: 14,
                                     color: Colors.black,
@@ -284,23 +276,20 @@ class _ResultScanState extends State<ResultScan> {
                                   ),
                                 ),
                                 const SizedBox(height: 5),
-                                // Disable tombol "Tanya Trash Chatbot jika hasilnya error (0.00%)"
+                                // Disable tombol Chatbot jika hasil error (0.00%)
                                 Opacity(
                                   opacity: _isErrorResult ? 0.5 : 1.0,
                                   child: AbsorbPointer(
                                     absorbing: _isErrorResult,
                                     child: GestureDetector(
                                       onTap: () {
-                                        final String trashType =
-                                            _predictedLabel;
                                         final String question =
-                                            "Tolong berikan informasi lebih detail mengenai sampah $trashType!";
+                                            "Tolong berikan informasi lebih detail mengenai sampah $_predictedLabel!";
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
                                             builder: (context) =>
-                                                TrashChatbotPage(
-                                                    initialQuestion: question),
+                                                TrashChatbotPage(initialQuestion: question),
                                           ),
                                         );
                                       },
@@ -315,11 +304,7 @@ class _ResultScanState extends State<ResultScan> {
                                               color: AppColors.fernGreen,
                                             ),
                                           ),
-                                          Icon(
-                                            Icons.arrow_forward_ios,
-                                            size: 12,
-                                            color: AppColors.fernGreen,
-                                          ),
+                                          Icon(Icons.arrow_forward_ios, size: 12, color: AppColors.fernGreen),
                                         ],
                                       ),
                                     ),
@@ -348,12 +333,12 @@ class _ResultScanState extends State<ResultScan> {
                   const SizedBox(height: 16),
                   Container(
                     height: 1,
-                    color: AppColors.darkMossGreen.withAlpha(
-                      (255 * 0.5).round(),
-                    ),
+                    color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                     width: double.infinity,
                   ),
                   const SizedBox(height: 24),
+
+                  // Card: Saran Penanganan
                   _buildInfoCard(
                     title: 'Saran\nPenanganan',
                     imagePath: 'assets/images/info_1.png',
@@ -363,22 +348,37 @@ class _ResultScanState extends State<ResultScan> {
                             Navigator.push(
                               context,
                               MaterialPageRoute(
-                                builder: (context) => HandlingTrash(
-                                  trashType: _predictedLabel,
+                                builder: (context) => HandlingTrash(trashType: _predictedLabel),
+                              ),
+                            );
+                          },
+                    isError: _isErrorResult,
+                  ),
+
+                  const SizedBox(height: 16),
+
+                  // Card: Trash Capsule (-> TRASH CAPSULE INLINE)
+                  _buildInfoCard(
+                    title: 'Trash\nCapsule',
+                    imagePath: 'assets/images/info_2.png',
+                    onTap: _isErrorResult
+                        ? null
+                        : () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => TrashCapsuleInline(
+                                  wasteType: _predictedLabel,
                                 ),
                               ),
                             );
                           },
                     isError: _isErrorResult,
                   ),
+
                   const SizedBox(height: 16),
-                  _buildInfoCard(
-                    title: 'Trash\nCapsule',
-                    imagePath: 'assets/images/info_2.png',
-                    onTap: _isErrorResult ? null : () {},
-                    isError: _isErrorResult,
-                  ),
-                  const SizedBox(height: 16),
+
+                  // Card: Trash Location
                   _buildInfoCard(
                     title: 'Trash\nLocation',
                     imagePath: 'assets/images/info_3.png',
@@ -387,9 +387,7 @@ class _ResultScanState extends State<ResultScan> {
                         : () {
                             Navigator.push(
                               context,
-                              MaterialPageRoute(
-                                builder: (context) => TrashLocation(),
-                              ),
+                              MaterialPageRoute(builder: (context) => TrashLocation()),
                             );
                           },
                     isError: _isErrorResult,
@@ -403,14 +401,12 @@ class _ResultScanState extends State<ResultScan> {
       floatingActionButton: FloatingActionButton(
         onPressed: _startScanCamera,
         backgroundColor: AppColors.fernGreen,
-        child: const Icon(
-          Icons.camera_alt_outlined,
-          color: AppColors.whiteSmoke,
-        ),
+        child: const Icon(Icons.camera_alt_outlined, color: AppColors.whiteSmoke),
       ),
     );
   }
 
+  // Reusable kartu “Informasi Penting”
   Widget _buildInfoCard({
     required String title,
     required String imagePath,
@@ -457,8 +453,7 @@ class _ResultScanState extends State<ResultScan> {
                           shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(10),
                           ),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 16, vertical: 10),
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         ),
                         child: const Text(
                           'Selengkapnya',
@@ -479,11 +474,7 @@ class _ResultScanState extends State<ResultScan> {
                   topRight: Radius.circular(20),
                   bottomRight: Radius.circular(20),
                 ),
-                child: Image.asset(
-                  imagePath,
-                  fit: BoxFit.cover,
-                  width: 130,
-                ),
+                child: Image.asset(imagePath, fit: BoxFit.cover, width: 130),
               ),
             ],
           ),
