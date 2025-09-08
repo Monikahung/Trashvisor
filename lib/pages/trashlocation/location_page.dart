@@ -148,8 +148,8 @@ class _LocationPageState extends State<LocationPage> {
       return;
     }
 
-    // Bersihkan daftar _nearbyPlaces sebelum memuat data baru
-    _nearbyPlaces.clear();
+    // Gunakan Set untuk mencegah duplikasi berdasarkan place_id
+    Set<Map<String, dynamic>> uniquePlaces = {};
 
     final Map<String, String> placeQueries = {
       'TPA': 'tempat pembuangan akhir',
@@ -166,10 +166,10 @@ class _LocationPageState extends State<LocationPage> {
 
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/nearbysearch/json'
-            '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
-            '&radius=$radius'
-            '&keyword=${Uri.encodeComponent(keyword)}'
-            '&key=$_apiKey',
+        '?location=${_currentPosition!.latitude},${_currentPosition!.longitude}'
+        '&radius=$radius'
+        '&keyword=${Uri.encodeComponent(keyword)}'
+        '&key=$_apiKey',
       );
 
       final response = await http.get(url);
@@ -178,71 +178,100 @@ class _LocationPageState extends State<LocationPage> {
         if (data['results'] != null) {
           if (!mounted) return;
           for (var result in data['results']) {
-            final lat = result['geometry']['location']['lat'];
-            final lng = result['geometry']['location']['lng'];
+            final placeId = result['place_id'] as String;
+            final lat =
+                (result['geometry']['location']['lat'] as num?)?.toDouble() ??
+                0.0;
+            final lng =
+                (result['geometry']['location']['lng'] as num?)?.toDouble() ??
+                0.0;
 
-            final distance = Geolocator.distanceBetween(
-              _currentPosition!.latitude,
-              _currentPosition!.longitude,
-              lat,
-              lng,
-            ) / 1000; // Hitung jarak dalam km
+            // Cek apakah lokasi dengan placeId yang sama sudah ada di dalam Set
+            if (!uniquePlaces.any((p) => p['place_id'] == placeId)) {
+              final distance =
+                Geolocator.distanceBetween(
+                  _currentPosition!.latitude,
+                  _currentPosition!.longitude,
+                  lat,
+                  lng,
+                ) /
+                1000; // Hitung jarak dalam km
 
-            // Simpan detail tempat dan jaraknya
-            _nearbyPlaces.add({
-              'name': result['name'],
-              'type': customName,
-              'location': LatLng(lat, lng),
-              'place_id': result['place_id'],
-              'distance': distance, // Simpan jarak
-              'rating': result['rating']?.toDouble() ?? 0.0,
-              'reviews': result['user_ratings_total'] ?? 0,
-              'photo_reference': result['photos']?.first['photo_reference'],
-            });
+              // Tambahkan ke Set, bukan ke List langsung
+              uniquePlaces.add({
+                'name': result['name'],
+                'type': customName,
+                'location': LatLng(lat, lng),
+                'place_id': placeId,
+                'distance': distance, // Simpan jarak
+                'rating': result['rating']?.toDouble() ?? 0.0,
+                'reviews': result['user_ratings_total'] ?? 0,
+                'photo_reference': result['photos']?.first['photo_reference'],
+              });
 
-            // Buat marker seperti biasa
-            BitmapDescriptor markerIcon;
-            if (customName == 'TPA') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed);
-            } else if (customName == 'TPS') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet);
-            } else if (customName == 'Bank Sampah') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen);
-            } else if (customName == 'Daur Ulang') {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueYellow);
-            } else {
-              markerIcon = BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueAzure);
+              // Buat marker seperti biasa
+              BitmapDescriptor markerIcon;
+              if (customName == 'TPA') {
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueRed,
+                );
+              } else if (customName == 'TPS') {
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueViolet,
+                );
+              } else if (customName == 'Bank Sampah') {
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueGreen,
+                );
+              } else if (customName == 'Daur Ulang') {
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueYellow,
+                );
+              } else {
+                markerIcon = BitmapDescriptor.defaultMarkerWithHue(
+                  BitmapDescriptor.hueAzure,
+                );
+              }
+
+              setState(() {
+                _markers.add(
+                  Marker(
+                    markerId: MarkerId(placeId),
+                    position: LatLng(lat, lng),
+                    infoWindow: InfoWindow(
+                      title: result['name'],
+                      snippet: customName,
+                    ),
+                    icon: markerIcon,
+                    onTap: () {
+                      // Temukan data yang sudah disimpan untuk marker ini
+                      final placeData = _nearbyPlaces.firstWhere(
+                        (p) => p['place_id'] == placeId,
+                      );
+                      _showInfoSheet(
+                        name: placeData['name'],
+                        type: placeData['type'],
+                        rating: placeData['rating'],
+                        reviews: placeData['reviews'],
+                        imageUrl: _getPhotoUrl(placeData['photo_reference']),
+                        destination: placeData['location'],
+                      );
+                    },
+                  ),
+                );
+              });
             }
-
-            setState(() {
-              _markers.add(
-                Marker(
-                  markerId: MarkerId(result['place_id']),
-                  position: LatLng(lat, lng),
-                  infoWindow: InfoWindow(title: result['name'], snippet: customName),
-                  icon: markerIcon,
-                  onTap: () {
-                    // Temukan data yang sudah disimpan untuk marker ini
-                    final placeData = _nearbyPlaces.firstWhere((p) => p['place_id'] == result['place_id']);
-                    _showInfoSheet(
-                      name: placeData['name'],
-                      type: placeData['type'],
-                      rating: placeData['rating'],
-                      reviews: placeData['reviews'],
-                      imageUrl: _getPhotoUrl(placeData['photo_reference']),
-                      destination: placeData['location'],
-                    );
-                  },
-                ),
-              );
-            });
           }
         }
       } else {
         debugPrint('Error saat ambil data $customName: ${response.statusCode}');
       }
     }
-    
+
+    // Setelah semua loop selesai, bersihkan _nearbyPlaces dan isi ulang dengan data unik
+    _nearbyPlaces.clear();
+    _nearbyPlaces.addAll(uniquePlaces);
+
     // Urutkan daftar tempat setelah semua data terisi
     if (!mounted) return;
     setState(() {
@@ -509,15 +538,21 @@ class _LocationPageState extends State<LocationPage> {
     _searchSuggestions.clear();
 
     final filteredPlaces = _nearbyPlaces
-        .where((place) =>
-            (place['name'] as String).toLowerCase().contains(query.toLowerCase()))
+        .where(
+          (place) => (place['name'] as String).toLowerCase().contains(
+            query.toLowerCase(),
+          ),
+        )
         .toList();
 
     final uniqueSuggestions = filteredPlaces
-        .map((place) => {
-              'name': '${place['name']} (${(place['distance'] as double).toStringAsFixed(1)} km)',
-              'place_id': place['place_id'],
-            })
+        .map(
+          (place) => {
+            'name':
+                '${place['name']} (${(place['distance'] as double).toStringAsFixed(1)} km)',
+            'place_id': place['place_id'],
+          },
+        )
         .toSet()
         .toList();
 
@@ -529,7 +564,7 @@ class _LocationPageState extends State<LocationPage> {
   // Ubah parameter dari 'query' menjadi 'placeId'
   void _performSearch(String placeId) {
     if (!mounted) return;
-    
+
     final place = _nearbyPlaces.firstWhere(
       (p) => p['place_id'] == placeId,
       orElse: () => {},
@@ -540,7 +575,7 @@ class _LocationPageState extends State<LocationPage> {
       final destinationName = place['name'] as String;
 
       _mapController?.animateCamera(CameraUpdate.newLatLng(destination));
-      
+
       setState(() {
         _polylines.clear();
       });
@@ -581,29 +616,31 @@ class _LocationPageState extends State<LocationPage> {
                   color: Colors.white,
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  fontFamily: 'Roboto'
+                  fontFamily: 'Roboto',
                 ),
               ),
             ],
           ),
-          
+
           // Warna latar belakang SnackBar
           backgroundColor: Colors.red.shade700,
-          
+
           // Durasi SnackBar ditampilkan
           duration: const Duration(seconds: 3),
-          
+
           // Perilaku SnackBar: floating agar muncul di tengah bawah dan tidak selebar layar
           behavior: SnackBarBehavior.floating,
-          
+
           // Bentuk SnackBar: sudut membulat
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(15), // Sesuaikan radius untuk kelengkungan sudut
+            borderRadius: BorderRadius.circular(
+              15,
+            ), // Sesuaikan radius untuk kelengkungan sudut
           ),
-          
+
           // Margin dari tepi layar (opsional, untuk tampilan yang lebih "mengambang")
           margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-          
+
           // Padding internal di dalam SnackBar (opsional, bisa diatur lewat content juga)
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         ),
@@ -687,7 +724,8 @@ class _LocationPageState extends State<LocationPage> {
                   myLocationButtonEnabled: false,
                   compassEnabled: false,
                 ),
-                if (_searchSuggestions.isNotEmpty) // Tampilkan hanya jika ada saran
+                if (_searchSuggestions
+                    .isNotEmpty) // Tampilkan hanya jika ada saran
                   Positioned(
                     top: 75, // Posisi dari atas
                     left: 16,
@@ -695,9 +733,13 @@ class _LocationPageState extends State<LocationPage> {
                     child: Container(
                       // Atur batas tinggi maksimum di sini
                       constraints: BoxConstraints(
-                        maxHeight: MediaQuery.of(context).size.height * 0.7, // Contoh: maks 70% tinggi layar
+                        maxHeight:
+                            MediaQuery.of(context).size.height *
+                            0.7, // Contoh: maks 70% tinggi layar
                       ),
-                      margin: EdgeInsets.only(bottom: 20 + MediaQuery.of(context).viewInsets.bottom),
+                      margin: EdgeInsets.only(
+                        bottom: 20 + MediaQuery.of(context).viewInsets.bottom,
+                      ),
                       decoration: BoxDecoration(
                         color: Colors.white,
                         borderRadius: BorderRadius.circular(15),
@@ -821,8 +863,10 @@ class _LocationPageState extends State<LocationPage> {
                                 child: Text(
                                   'Rute ke $_destinationName',
                                   style: const TextStyle(
+                                    fontFamily: 'Nunito',
                                     fontWeight: FontWeight.bold,
                                     fontSize: 16,
+                                    color: AppColors.darkMossGreen,
                                   ),
                                   softWrap: true,
                                 ),
@@ -845,19 +889,30 @@ class _LocationPageState extends State<LocationPage> {
                             children: [
                               const Icon(
                                 Icons.directions_car,
-                                color: Colors.blue,
+                                color: AppColors.fernGreen,
                               ),
                               const SizedBox(width: 5),
                               Text(
                                 '${_distanceInKm!.toStringAsFixed(2)} km',
-                                style: const TextStyle(fontSize: 14),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Roboto',
+                                  color: Colors.black,
+                                ),
                               ),
                               const SizedBox(width: 15),
-                              const Icon(Icons.access_time, color: Colors.blue),
+                              const Icon(
+                                Icons.access_time,
+                                color: AppColors.fernGreen,
+                              ),
                               const SizedBox(width: 5),
                               Text(
                                 _durationText!,
-                                style: const TextStyle(fontSize: 14),
+                                style: const TextStyle(
+                                  fontSize: 14,
+                                  fontFamily: 'Roboto',
+                                  color: Colors.black,
+                                ),
                               ),
                             ],
                           ),
