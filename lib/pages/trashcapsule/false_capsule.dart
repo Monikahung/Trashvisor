@@ -40,13 +40,28 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
       _loading = false;
     });
 
-    final List<CapsuleItem> items = _result?.items ?? const <CapsuleItem>[];
+    final List<CapsuleItem> items = _itemsForUI();
     final bool hasImage =
-        items.any((e) => (e.imageUrl != null && e.imageUrl!.isNotEmpty));
+        items.isNotEmpty && (items.first.imageUrl != null && items.first.imageUrl!.isNotEmpty);
+
+    // Deteksi limit habis dari errorMessage server
+    final err = (_result?.errorMessage ?? '').toLowerCase();
+    final bool limitBlockedNoImage =
+        (err.contains('limit harian') || err.contains('limit tercapai')) && !hasImage;
+
     final remain = await _service.remainingLimit();
     if (!mounted) return;
 
-    if (hasImage) {
+    if (limitBlockedNoImage) {
+      showTopToast(
+        context,
+        message:
+            'Limit harian tercapai: gambar tidak dibuat. Narasi tetap tampil. Sisa limit ${remain ?? '-'} / $kDailyLimit',
+        backgroundColor: const Color(0xFFFB8C00),
+        icon: Icons.hourglass_empty_outlined,
+        extraTop: 52,
+      );
+    } else if (hasImage) {
       showTopToast(
         context,
         message:
@@ -75,42 +90,39 @@ class _FalseTrashCapsuleState extends State<FalseTrashCapsule> {
     }
   }
 
-/// ===============================
-/// HEADER: 1 gambar 1:1
-/// - Jika imageUrl ada -> pakai SquareHeaderImage (contain, no crop)
-/// - Jika fallback asset -> pakai BoxFit.cover (biar penuh, nggak aneh)
-/// ===============================
-Widget _headerImage() {
-  final String? url =
-      (_result?.items.isNotEmpty ?? false) ? _result!.items.first.imageUrl : null;
+  /// ===============================
+  /// HEADER: 1 gambar 1:1
+  /// ===============================
+  Widget _headerImage() {
+    final List<CapsuleItem> items = _itemsForUI();
+    final String? url = (items.isNotEmpty) ? items.first.imageUrl : null;
 
-  if (url != null && url.isNotEmpty) {
-    return SquareHeaderImage(
-      imageUrl: url,
-      fallbackAsset: 'assets/images/false_capsule.png',
-    );
-  }
+    if (url != null && url.isNotEmpty) {
+      return SquareHeaderImage(
+        imageUrl: url,
+        fallbackAsset: 'assets/images/false_capsule.png',
+      );
+    }
 
-  // Fallback (default) -> full fit (cover)
-  return Padding(
-    padding: const EdgeInsets.symmetric(horizontal: 24.0),
-    child: AspectRatio(
-      aspectRatio: 1, // kotak 1:1
-      child: Container(
-        decoration: BoxDecoration(
-          color: const Color(0xFFE8F5E9),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: AppColors.fernGreen, width: 1),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: Image.asset(
-          'assets/images/false_capsule.png',
-          fit: BoxFit.cover, // 🔸 penuhi kotak (boleh crop dikit)
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Container(
+          decoration: BoxDecoration(
+            color: const Color(0xFFE8F5E9),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: AppColors.fernGreen, width: 1),
+          ),
+          clipBehavior: Clip.antiAlias,
+          child: Image.asset(
+            'assets/images/false_capsule.png',
+            fit: BoxFit.cover,
+          ),
         ),
       ),
-    ),
-  );
-}
+    );
+  }
 
   /// Kartu narasi tanpa gambar
   Widget _narrativeCard(CapsuleItem item) {
@@ -148,6 +160,59 @@ Widget _headerImage() {
     );
   }
 
+  // ===============================
+  // 🔒 PENJAMIN NARASI SELALU ADA
+  // ===============================
+  List<CapsuleItem> _itemsForUI() {
+    final list = _result?.items ?? const <CapsuleItem>[];
+    if (list.isNotEmpty) return list;
+    return _fallbackItems(CapsuleGlobal.searchText.trim(), good: false);
+  }
+
+  List<CapsuleItem> _fallbackItems(String waste, {required bool good}) {
+    final w = waste.isEmpty ? 'sampah' : waste.toLowerCase();
+    if (!good) {
+      return [
+        CapsuleItem(
+          title: 'Lingkungan Rusak',
+          description: '$w yang tercecer mencemari sungai, laut, dan tanah.',
+          fallbackAsset: 'assets/images/false_capsule.png',
+        ),
+        CapsuleItem(
+          title: 'Udara Tercemar',
+          description: 'Pembakaran $w menghasilkan asap berbahaya.',
+          fallbackAsset: 'assets/images/false_capsule_2.png',
+        ),
+        CapsuleItem(
+          title: 'Sumber Habis',
+          description:
+              'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
+          fallbackAsset: 'assets/images/false_capsule_3.png',
+        ),
+      ];
+    } else {
+      return [
+        CapsuleItem(
+          title: 'Lingkungan Sehat',
+          description:
+              'Pengelolaan $w yang benar menjaga sungai, laut, dan tanah tetap bersih.',
+          fallbackAsset: 'assets/images/true_capsule.png',
+        ),
+        CapsuleItem(
+          title: 'Udara Bersih',
+          description: 'Polusi berkurang karena $w tidak dibakar sembarangan.',
+          fallbackAsset: 'assets/images/true_capsule_2.png',
+        ),
+        CapsuleItem(
+          title: 'Sumber Terjaga',
+          description:
+              'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
+          fallbackAsset: 'assets/images/true_capsule_3.png',
+        ),
+      ];
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final waste = CapsuleGlobal.searchText.trim();
@@ -155,7 +220,7 @@ Widget _headerImage() {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
-    final List<CapsuleItem> items = _result?.items ?? const <CapsuleItem>[];
+    final List<CapsuleItem> items = _itemsForUI();
 
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
