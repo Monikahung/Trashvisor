@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:trashvisor/core/colors.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'map_page.dart';
 
 // Kelas untuk Bagian Header di atas
 class TrashLocationHeader extends StatelessWidget {
@@ -71,7 +73,7 @@ class TrashLocationHeader extends StatelessWidget {
   }
 }
 
-// Kelas untuk Kartu Lokasi yang dapat digunakan kembali
+// Kelas untuk kartu lokasi yang dapat digunakan kembali
 class TrashLocationCard extends StatelessWidget {
   final String distance;
   final String time;
@@ -80,6 +82,7 @@ class TrashLocationCard extends StatelessWidget {
   final double rating;
   final int reviewCount;
   final String imagePath; // Sekarang ini adalah URL dari API
+  final LatLng? destination; // Parameter baru untuk koordinat tujuan
   final VoidCallback onTap;
 
   const TrashLocationCard({
@@ -90,7 +93,7 @@ class TrashLocationCard extends StatelessWidget {
     required this.locationName,
     required this.rating,
     required this.reviewCount,
-    required this.imagePath,
+    required this.imagePath,    this.destination, // Optional, karena mungkin ada kasus tanpa destinasi
     required this.onTap,
   });
 
@@ -101,7 +104,7 @@ class TrashLocationCard extends StatelessWidget {
       padding: const EdgeInsets.all(16),
       // Dekorasi container dengan border, warna, dan radius
       decoration: BoxDecoration(
-        color: AppColors.mossGreen.withAlpha(15), // Warna dengan opacity 15%
+        color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.fernGreen, width: 1),
       ),
@@ -137,7 +140,7 @@ class TrashLocationCard extends StatelessWidget {
                         ),
                         value: loadingProgress.expectedTotalBytes != null
                             ? loadingProgress.cumulativeBytesLoaded /
-                                  loadingProgress.expectedTotalBytes!
+                                loadingProgress.expectedTotalBytes!
                             : null,
                       ),
                     );
@@ -175,7 +178,7 @@ class TrashLocationCard extends StatelessWidget {
                   // Baris untuk rating dan jumlah review
                   Row(
                     children: [
-                      Icon(
+                      const Icon(
                         Icons.star,
                         color: AppColors.darkMossGreen,
                         size: 20,
@@ -204,10 +207,24 @@ class TrashLocationCard extends StatelessWidget {
                   const SizedBox(height: 8),
                   // Tombol "Lihat Peta"
                   SizedBox(
-                    width: double
-                        .infinity, // Membuat tombol mengisi lebar yang tersedia
+                    width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: onTap,
+                      onPressed: () {
+                        if (destination != null) {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => MapPage(
+                                locationName: locationName,
+                                destination: destination!,
+                                type: type,
+                              ),
+                            ),
+                          );
+                        } else {
+                          onTap();
+                        }
+                      },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppColors.fernGreen,
                         shape: RoundedRectangleBorder(

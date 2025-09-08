@@ -6,6 +6,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:trashvisor/core/colors.dart';
 import 'package:trashvisor/pages/trashvision/location_component.dart';
+import 'nearest_location.dart';
 
 // Model data untuk lokasi tempat sampah
 class TrashLocationData {
@@ -25,9 +26,19 @@ class TrashLocationData {
     required this.longitude,
     this.rating = 0.0,
     this.reviewCount = 0,
-    this.placeId = '',
+    required this.placeId,
     this.photoReference = '',
   });
+
+  // Tambahkan kode ini untuk memastikan keunikan berdasarkan placeId
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is TrashLocationData && other.placeId == placeId;
+  }
+
+  @override
+  int get hashCode => placeId.hashCode;
 }
 
 class TrashLocation extends StatefulWidget {
@@ -83,9 +94,9 @@ class TrashLocationState extends State<TrashLocation> {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Izin lokasi ditolak.')),
-          );
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text('Izin lokasi ditolak.')));
         }
         setState(() {
           isLoading = false;
@@ -140,7 +151,8 @@ class TrashLocationState extends State<TrashLocation> {
 
   // Ambil lokasi sekitar sesuai placeQueries
   Future<void> _loadNearbyPlaces(Position position) async {
-    List<TrashLocationData> locations = [];
+    // Gunakan Set untuk mencegah duplikasi
+    Set<TrashLocationData> uniqueLocations = {};
 
     for (var entry in placeQueries.entries) {
       final customName = entry.key;
@@ -160,10 +172,11 @@ class TrashLocationState extends State<TrashLocation> {
           final data = json.decode(response.body);
           if (data['results'] != null) {
             for (var result in data['results']) {
-              final lat = result['geometry']['location']['lat'];
-              final lng = result['geometry']['location']['lng'];
+              final lat = (result['geometry']['location']['lat'] as num?)?.toDouble() ?? 0.0;
+              final lng = (result['geometry']['location']['lng'] as num?)?.toDouble() ?? 0.0;
 
-              locations.add(
+              // Tambahkan ke Set. Jika placeId sudah ada, tidak akan ditambahkan lagi.
+              uniqueLocations.add(
                 TrashLocationData(
                   name: result['name'] ?? 'Tempat Sampah',
                   type: customName,
@@ -172,16 +185,18 @@ class TrashLocationState extends State<TrashLocation> {
                   rating: (result['rating'] ?? 0.0).toDouble(),
                   reviewCount: result['user_ratings_total'] ?? 0,
                   placeId: result['place_id'] ?? '',
-                  photoReference: (result['photos'] != null &&
-                          result['photos'].isNotEmpty)
-                      ? result['photos'][0]['photo_reference']
-                      : '',
+                  photoReference:
+                      (result['photos'] != null && result['photos'].isNotEmpty)
+                          ? result['photos'][0]['photo_reference']
+                          : '',
                 ),
               );
             }
           }
         } else {
-          debugPrint('Error saat ambil data $customName: ${response.statusCode}');
+          debugPrint(
+            'Error saat ambil data $customName: ${response.statusCode}',
+          );
         }
       } catch (e) {
         debugPrint('Kesalahan saat memuat data: $e');
@@ -191,7 +206,8 @@ class TrashLocationState extends State<TrashLocation> {
 
     if (mounted) {
       setState(() {
-        nearbyTrashLocations = locations;
+        // Konversi Set ke List untuk digunakan di UI dan Distance Matrix API
+        nearbyTrashLocations = uniqueLocations.toList();
         _addMarkers();
       });
     }
@@ -271,7 +287,10 @@ class TrashLocationState extends State<TrashLocation> {
       return [];
     }
 
-    final userLocation = LatLng(currentPosition!.latitude, currentPosition!.longitude);
+    final userLocation = LatLng(
+      currentPosition!.latitude,
+      currentPosition!.longitude,
+    );
     List<Map<String, dynamic>> allResults = [];
 
     const int batchSize = 25;
@@ -294,7 +313,9 @@ class TrashLocationState extends State<TrashLocation> {
         final response = await http.get(Uri.parse(url));
 
         if (response.statusCode != 200) {
-          debugPrint("DistanceMatrix gagal untuk batch $i: ${response.statusCode}");
+          debugPrint(
+            "DistanceMatrix gagal untuk batch $i: ${response.statusCode}",
+          );
           continue;
         }
 
@@ -309,7 +330,10 @@ class TrashLocationState extends State<TrashLocation> {
           final loc = batch[j];
           final element = elements[j];
 
-          if (element["status"] == "OK") {
+          if (element["status"] == "OK" && element["distance"] != null && element["duration"] != null) {
+            final ratingValue = loc.rating;
+            final reviewCountValue = loc.reviewCount;
+
             String markerColor = 'blue';
             switch (loc.type) {
               case "TPA":
@@ -336,12 +360,14 @@ class TrashLocationState extends State<TrashLocation> {
 
             allResults.add({
               "name": loc.name,
-              "rating": loc.rating,
-              "reviewCount": loc.reviewCount,
+              "rating": ratingValue.toDouble(),
+              "reviewCount": reviewCountValue,
               "distance": element["distance"]["text"],
               "duration": element["duration"]["text"],
               "imagePath": staticMapUrl,
               "type": loc.type,
+              "latitude": loc.latitude,
+              "longitude": loc.longitude,
             });
           }
         }
@@ -363,7 +389,9 @@ class TrashLocationState extends State<TrashLocation> {
     }
 
     allResults.sort((a, b) {
-      return parseDistance(a["distance"]).compareTo(parseDistance(b["distance"]));
+      return parseDistance(
+        a["distance"],
+      ).compareTo(parseDistance(b["distance"]));
     });
 
     return allResults.take(3).toList();
@@ -404,7 +432,9 @@ class TrashLocationState extends State<TrashLocation> {
                   const SizedBox(height: 24),
                   Container(
                     height: 1,
-                    color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
+                    color: AppColors.darkMossGreen.withAlpha(
+                      (255 * 0.5).round(),
+                    ),
                     width: double.infinity,
                   ),
                   const SizedBox(height: 24),
@@ -417,10 +447,14 @@ class TrashLocationState extends State<TrashLocation> {
                     ),
                     child: isLoading || currentPosition == null
                         ? const Center(
-                            child: CircularProgressIndicator(color: AppColors.fernGreen),
+                            child: CircularProgressIndicator(
+                              color: AppColors.fernGreen,
+                            ),
                           )
                         : ClipRRect(
-                            borderRadius: BorderRadius.circular(20), // ini yang bikin melengkung
+                            borderRadius: BorderRadius.circular(
+                              20,
+                            ), // ini yang bikin melengkung
                             child: GoogleMap(
                               onMapCreated: (controller) {
                                 mapController = controller;
@@ -451,7 +485,14 @@ class TrashLocationState extends State<TrashLocation> {
                         ),
                       ),
                       GestureDetector(
-                        onTap: () {},
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => const NearestLocationPage(),
+                            ),
+                          );
+                        },
                         child: const Icon(
                           Icons.arrow_forward_ios,
                           size: 20,
@@ -463,10 +504,14 @@ class TrashLocationState extends State<TrashLocation> {
                   const SizedBox(height: 16),
                   if (isLoading)
                     const Center(
-                      child: CircularProgressIndicator(color: AppColors.fernGreen)
-                      )
+                      child: CircularProgressIndicator(
+                        color: AppColors.fernGreen,
+                      ),
+                    )
                   else if (top3NearestLocations.isEmpty)
-                    const Center(child: Text("Tidak ada lokasi terdekat ditemukan."))
+                    const Center(
+                      child: Text("Tidak ada lokasi terdekat ditemukan."),
+                    )
                   else
                     Column(
                       children: top3NearestLocations.map((location) {
@@ -480,6 +525,11 @@ class TrashLocationState extends State<TrashLocation> {
                             distance: location["distance"],
                             time: location["duration"],
                             type: location["type"],
+                            destination: LatLng(
+                              (location["latitude"] as num?)?.toDouble() ?? 0.0,
+                              (location["longitude"] as num?)?.toDouble() ??
+                                  0.0,
+                            ),
                             onTap: () {},
                           ),
                         );
