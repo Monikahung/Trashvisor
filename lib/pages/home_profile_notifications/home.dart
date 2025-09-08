@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:trashvisor/core/colors.dart';
+import 'package:trashvisor/pages/trashreward/trashreward_page_1.dart';
 import 'profile.dart';
 import 'notifications.dart';
 import '../trashvision/scan_camera.dart';
@@ -335,7 +336,14 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.card_giftcard_outlined,
                 title: 'Trash Reward',
                 subtitle: 'Kumpulkan poin dan tukar dengan lencana dan uang',
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EcoRewardPage(),
+                    ),
+                  );
+                },
                 gradient: const LinearGradient(
                   colors: [
                     Color(0xFFA2C96C),

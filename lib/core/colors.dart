@@ -24,4 +24,7 @@ class AppColors {
   static const Color rewardGold = Color(0xFFF9A825);
   // Warna putih semi-transparan untuk kartu profil
   static const Color rewardWhiteTransparent = Color.fromRGBO(255, 255, 255, 0.85);
+
+  static const Color rewardCardBg = Color(0xFFA2C96C);
+  static const Color rewardCardBorder = Color(0xFF719325);
 }
