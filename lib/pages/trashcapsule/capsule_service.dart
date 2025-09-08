@@ -1,17 +1,17 @@
-/// ===================================================================
-/// CapsuleService — IO ke Supabase Edge Function + Logging + Limit
-/// -------------------------------------------------------------------
-/// Perubahan penting:
-/// 1) AKTIFKAN CACHE: hasil generate disimpan di CapsuleCache,
-///    sehingga bolak-balik Baik/Buruk untuk waste yang sama
-///    TIDAK memicu request & log ulang.
-/// 2) DEDUP IN-FLIGHT: jika tombol ditekan berkali-kali sebelum respons
-///    datang, hanya 1 request yang benar-benar berjalan.
-/// 3) FALLBACK: hanya item[0] yang punya fallbackAsset untuk dipakai
-///    sebagai HEADER image; 3 kartu narasi di UI tidak pakai gambar.
-/// 4) LIMIT: tetap dihitung per distinct waste_type dengan success=true
-///    pada hari JKT (success=true = text && image berhasil).
-/// ===================================================================
+// / ===================================================================
+// / CapsuleService — IO ke Supabase Edge Function + Logging + Limit
+// / -------------------------------------------------------------------
+// / Perubahan penting:
+// / 1) AKTIFKAN CACHE: hasil generate disimpan di CapsuleCache,
+// /    sehingga bolak-balik Baik/Buruk untuk waste yang sama
+// /    TIDAK memicu request & log ulang.
+// / 2) DEDUP IN-FLIGHT: jika tombol ditekan berkali-kali sebelum respons
+// /    datang, hanya 1 request yang benar-benar berjalan.
+// / 3) FALLBACK: hanya item[0] yang punya fallbackAsset untuk dipakai
+// /    sebagai HEADER image; 3 kartu narasi di UI tidak pakai gambar.
+// / 4) LIMIT: tetap dihitung per distinct waste_type dengan success=true
+// /    pada hari JKT (success=true = text && image berhasil).
+// / ===================================================================
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'capsule_models.dart';
@@ -26,7 +26,7 @@ const String kDefaultImageSize = '1024x1024';
 class CapsuleService {
   final _client = Supabase.instance.client;
 
-  /// Dedup: menyimpan request yang sedang berjalan per key "<waste>|<scenario>"
+  /// Dedup: menyimpan request yang sedang berjalan per key `<waste>|<scenario>`
   /// agar jika user menekan tombol berkali-kali, hanya 1 panggilan yang jalan.
   final Map<String, Future<CapsuleResult>> _inflight =
       <String, Future<CapsuleResult>>{};

@@ -267,7 +267,7 @@ Widget _headerImage() {
                       child: Container(
                         height: 1,
                         width: double.infinity,
-                        color: AppColors.darkMossGreen.withOpacity(0.5),
+                        color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -367,7 +367,7 @@ class _ActionButtonsSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    Widget _btn({
+    Widget btn({
       required IconData icon,
       required String label,
       required Color color,
@@ -413,7 +413,7 @@ class _ActionButtonsSection extends StatelessWidget {
       child: Row(
         children: [
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.check_circle_outline,
               label: 'Penanganan Baik',
               color: Colors.green[800]!,
@@ -428,7 +428,7 @@ class _ActionButtonsSection extends StatelessWidget {
           ),
           const SizedBox(width: 16),
           Expanded(
-            child: _btn(
+            child: btn(
               icon: Icons.not_interested,
               label: 'Penanganan Buruk',
               color: Colors.red[800]!,

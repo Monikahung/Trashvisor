@@ -1,11 +1,11 @@
-/// ===================================================================
-/// CapsuleCache — cache ringan di memori aplikasi
-/// -------------------------------------------------------------------
-/// - Kunci: "<wasteLower>|<scenarioDb>" (contoh: "sampah plastik|BAIK").
-/// - Tujuan: mencegah panggilan ulang Edge Function saat user bolak-balik
-///   Baik <-> Buruk selama teks pencarian belum berubah.
-/// - Clear cache saat user mengubah isi search (lihat onChanged di UI).
-/// ===================================================================
+// / ===================================================================
+// / CapsuleCache — cache ringan di memori aplikasi
+// / -------------------------------------------------------------------
+// / - Kunci: "<wasteLower>|<scenarioDb>" (contoh: "sampah plastik|BAIK").
+// / - Tujuan: mencegah panggilan ulang Edge Function saat user bolak-balik
+// /   Baik <-> Buruk selama teks pencarian belum berubah.
+// / - Clear cache saat user mengubah isi search (lihat onChanged di UI).
+// / ===================================================================
 import 'capsule_models.dart';
 
 class CapsuleCache {
