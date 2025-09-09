@@ -70,7 +70,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.rewardWhiteTransparent.withOpacity(0.5),
+            color: AppColors.rewardWhiteTransparent.withAlpha((255 * 0.5).round()),
             shape: BoxShape.circle,
           ),
           child: IconButton(
@@ -107,7 +107,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: AppColors.rewardCardBg.withOpacity(0.85),
+          color: AppColors.rewardCardBg.withAlpha((255 * 0.85).round()),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(
             color: AppColors.rewardCardBorder,
@@ -115,7 +115,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           ),
           boxShadow: [
             BoxShadow(
-              color: AppColors.black.withOpacity(0.1),
+              color: AppColors.black.withAlpha((255 * 0.1).round()),
               blurRadius: 10,
               offset: const Offset(0, 5),
             ),
@@ -182,7 +182,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             const SizedBox(height: 16),
             LinearProgressIndicator(
               value: 0.7,
-              backgroundColor: Colors.white.withOpacity(0.5),
+              backgroundColor: Colors.white.withAlpha((255 * 0.5).round()),
               color: AppColors.rewardGreenPrimary,
               minHeight: 8,
               borderRadius: BorderRadius.circular(4),
@@ -376,7 +376,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 5)],
+        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.1).round()), blurRadius: 5)],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
