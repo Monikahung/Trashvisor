@@ -132,19 +132,35 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 const SizedBox(width: 8),
                 Text(
                   'Level ${levels[_selectedLevelIndex]}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: AppColors.deepForestGreen),
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                    color: AppColors.deepForestGreen,
+                    fontFamily: 'Nunito', // <-- FONT NUNITO
+                  ),
                 ),
                 const Spacer(),
                 TextButton(
                   onPressed: () { /* Navigasi ke halaman riwayat */ },
-                  child: const Text('Riwayat >', style: TextStyle(color: AppColors.darkMossGreen)),
+                  child: const Text(
+                    'Riwayat >',
+                    style: TextStyle(
+                      color: AppColors.darkMossGreen,
+                      fontFamily: 'Roboto', // <-- FONT ROBOTO
+                    ),
+                  ),
                 ),
               ],
             ),
             const SizedBox(height: 8),
             const Text(
                 'Udin Budiono',
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: AppColors.deepForestGreen)
+                style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.deepForestGreen,
+                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                )
             ),
             const SizedBox(height: 8),
             Row(
@@ -153,7 +169,12 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 const SizedBox(width: 8),
                 const Text(
                     '1,771',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: AppColors.deepForestGreen)
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.deepForestGreen,
+                      fontFamily: 'Roboto', // <-- FONT ROBOTO
+                    )
                 ),
               ],
             ),
@@ -168,7 +189,11 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             const SizedBox(height: 4),
             Text(
                 progressTexts[_selectedLevelIndex],
-                style: const TextStyle(fontSize: 12, color: AppColors.darkMossGreen)
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.darkMossGreen,
+                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                )
             ),
           ],
         ),
@@ -254,6 +279,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
+                  fontFamily: 'Roboto', // <-- FONT ROBOTO
                 ),
               ),
             ),
@@ -270,6 +296,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
+                  fontFamily: 'Roboto', // <-- FONT ROBOTO
                 ),
               ),
             ),
@@ -288,7 +315,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             children: days.map((dayData) {
               return _buildDayItem(
                 day: dayData['day'] as String,
-                points: dayData['points'] as String,
                 isCompleted: dayData['completed'] as bool,
                 isCurrent: dayData['isCurrent'] as bool,
               );
@@ -299,13 +325,12 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Fungsi Item Hari (TANPA TEKS POIN)
-  Widget _buildDayItem({required String day, required String points, required bool isCompleted, required bool isCurrent}) {
+  // Fungsi Item Hari
+  Widget _buildDayItem({required String day, required bool isCompleted, required bool isCurrent}) {
     bool hasCoin = isCompleted || isCurrent;
 
     return Column(
       children: [
-        // Teks poin dihapus dari sini
         Container(
           width: 40,
           height: 40,
@@ -326,7 +351,13 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
               : null,
         ),
         const SizedBox(height: 4),
-        Text(day, style: const TextStyle(fontSize: 12)),
+        Text(
+          day,
+          style: const TextStyle(
+            fontSize: 12,
+            fontFamily: 'Roboto', // <-- FONT ROBOTO
+          ),
+        ),
       ],
     );
   }
@@ -680,9 +711,10 @@ class MissionCard extends StatelessWidget {
                 Text(
                     title,
                     style: TextStyle(
-                        color: iconAndTextColor,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15
+                      color: iconAndTextColor,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 15,
+                      fontFamily: 'Nunito', // <-- FONT NUNITO
                     )
                 ),
                 const SizedBox(height: 4),
@@ -708,9 +740,10 @@ class MissionCard extends StatelessWidget {
                       Text(
                           points,
                           style: TextStyle(
-                              color: pointsTextColor,
-                              fontSize: 12,
-                              fontWeight: FontWeight.bold
+                            color: pointsTextColor,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            fontFamily: 'Nunito', // <-- FONT NUNITO
                           )
                       ),
                     ],
@@ -734,7 +767,10 @@ class MissionCard extends StatelessWidget {
               ),
               elevation: 3,
             ),
-            child: const Text('Mulai'),
+            child: const Text(
+              'Mulai',
+              style: TextStyle(fontFamily: 'Nunito'), // <-- FONT NUNITO
+            ),
           ),
         ],
       ),
