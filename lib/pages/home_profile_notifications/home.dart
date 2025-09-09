@@ -558,15 +558,29 @@ class _HomePageState extends State<HomePage> {
               Icons.chat_outlined,
               color: AppColors.darkOliveGreen,
             ),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const TrashChatbotPage(),
+                ),
+              );
+            },
           ),
-          const SizedBox(width: 48), // Spacer untuk FloatingActionButton
+          const SizedBox(width: 48),
           IconButton(
             icon: const Icon(
               Icons.location_on_outlined,
               color: AppColors.darkOliveGreen,
             ),
-            onPressed: () {},
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const LocationPage(),
+                ),
+              );
+            },
           ),
           IconButton(
             icon: const Icon(

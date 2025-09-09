@@ -34,7 +34,11 @@ class _HandlingTrashState extends State<HandlingTrash> {
       }
 
       final prompt =
-          "Berikan 5 saran praktis dalam bentuk bullet points dengan judul singkat di setiap poin untuk penanganan sampah jenis ${widget.trashType} dalam bahasa indonesia. Gunakan format berikut: <emoji> Judul - Deskripsi. Pisahkan setiap poin dengan karakter '|'. Contoh: ♻️ Daur Ulang - Ubah botol plastik bekas menjadi barang baru, seperti pot tanaman.";
+          '''Berikan 5 saran praktis dalam bentuk bullet points dengan judul singkat di setiap poin untuk penanganan sampah jenis ${widget.trashType} dalam bahasa indonesia. 
+          Pastikan setiap saran akurat, relevan, dan menggunakan tata bahasa baku yang benar. 
+          Pastikan emoji yang dihasilkan relevan dengan konten setiap judul. 
+          Gunakan format berikut: <emoji> Judul - Deskripsi. 
+          Pisahkan setiap poin dengan karakter '|'. Contoh: ♻️ Daur Ulang - Ubah botol plastik bekas menjadi barang baru, seperti pot tanaman.''';
 
       final uri = Uri.parse('https://api.openai.com/v1/completions');
 

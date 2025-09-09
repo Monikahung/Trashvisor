@@ -14,6 +14,12 @@ import 'capsule_cache.dart';
 /// ===================================================================
 class CapsuleGlobal {
   static String searchText = '';
+
+  // 🔁 Helper global untuk reset search & cache di seluruh flow Capsule
+  static void reset() {
+    searchText = '';
+    CapsuleCache.instance.clear();
+  }
 }
 
 /// ===================================================================
@@ -109,10 +115,31 @@ class _SearchBarSection extends StatelessWidget {
         ),
         child: TextField(
           controller: controller,
-          // 🔸 sangat penting: saat teks berubah, clear cache supaya pencarian baru generate ulang
+          // 🧹 Clear cache saat teks berubah
           onChanged: (v) {
             CapsuleGlobal.searchText = v;
             CapsuleCache.instance.clear();
+          },
+          // 🔔 Toast panduan saat user menekan tombol Search/Enter
+          onSubmitted: (v) {
+            CapsuleGlobal.searchText = v;
+            if (v.trim().isEmpty) {
+              showTopToast(
+                context,
+                message: 'Tulis dulu jenis sampah di kolom atas.',
+                backgroundColor: const Color(0xFFEA4335),
+                icon: Icons.error_outline,
+                extraTop: 44,
+              );
+            } else {
+              showTopToast(
+                context,
+                message: 'Silakan memilih Penanganan Baik atau Penanganan Buruk.',
+                backgroundColor: AppColors.fernGreen,
+                icon: Icons.touch_app_outlined,
+                extraTop: 44,
+              );
+            }
           },
           textInputAction: TextInputAction.search,
           decoration: const InputDecoration(
@@ -197,7 +224,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 if (CapsuleGlobal.searchText.trim().isEmpty) {
                   showTopToast(
                     context,
-                    message: 'Tulis dulu jenis sampah di kolom atas.',
+                    message: 'Tulis dulu jenis sampah di search kolom atas.',
                     backgroundColor: const Color(0xFFEA4335),
                     icon: Icons.error_outline,
                     extraTop: 44,
@@ -299,136 +326,148 @@ class TrashCapsulePage extends StatelessWidget {
         ? 'Tentukan tindakan penanganan sampah yang akan kamu lakukan.'
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
-    return Scaffold(
-      backgroundColor: AppColors.whiteSmoke,
-      appBar: AppBar(
-        toolbarHeight: 80,
-        backgroundColor: AppColors.mossGreen,
-        elevation: 0,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
-          onPressed: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (context) => HomePage(cameras: cameras)),
-            );
-          },
+    // 🔁 Pastikan reset juga berjalan saat user tekan back sistem
+    return WillPopScope(
+      onWillPop: () async {
+        CapsuleGlobal.reset(); // 🧹 kosongkan search + cache saat keluar halaman
+        return true;
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.whiteSmoke,
+        appBar: AppBar(
+          toolbarHeight: 80,
+          backgroundColor: AppColors.mossGreen,
+          elevation: 0,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back_ios_new, color: AppColors.whiteSmoke),
+            onPressed: () {
+              // 🔁 Reset sebelum kembali via tombol back AppBar
+              CapsuleGlobal.reset();
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => HomePage(cameras: cameras)),
+              );
+              // Catatan:
+              // Kalau kamu ingin benar-benar "kembali" (bukan push layar baru),
+              // ganti dengan: Navigator.pop(context);
+            },
+          ),
+          title: Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.fernGreen,
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: AppColors.whiteSmoke, width: 1),
+                ),
+                child: const Center(
+                  child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Trash Capsule',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Nunito',
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      'Simulasi dampak pengelolaan sampah',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 12,
+                        fontFamily: 'Roboto',
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
-        title: Row(
-          children: [
-            Container(
-              width: 48,
-              height: 48,
-              decoration: BoxDecoration(
-                color: AppColors.fernGreen,
-                borderRadius: BorderRadius.circular(24),
-                border: Border.all(color: AppColors.whiteSmoke, width: 1),
-              ),
-              child: const Center(
-                child: Icon(Icons.card_giftcard_outlined, color: AppColors.whiteSmoke),
-              ),
-            ),
-            const SizedBox(width: 10),
-            const Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Trash Capsule',
+        body: SafeArea(
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                const SizedBox(height: 30),
+                _SearchBarSection(controller: controller),
+                const SizedBox(height: 24),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'Pilih Tindak Penanganan',
                     style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
+                      fontSize: 22,
                       fontFamily: 'Nunito',
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkMossGreen,
                     ),
                   ),
-                  SizedBox(height: 4),
-                  Text(
-                    'Simulasi dampak pengelolaan sampah',
-                    style: TextStyle(
-                      color: Colors.white70,
-                      fontSize: 12,
+                ),
+                const SizedBox(height: 8),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    desc,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
                       fontFamily: 'Roboto',
                     ),
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(height: 24),
+                _ActionButtonsSection(cameras: cameras),
+                const SizedBox(height: 24),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Container(
+                    height: 1,
+                    width: double.infinity,
+                    color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'Dampak di Masa Depan',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontFamily: 'Nunito',
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkMossGreen,
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const Padding(
+                  padding: EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Text(
+                    'Tindakan yang kamu lakukan akan menentukan masa depan bumi.',
+                    style: TextStyle(
+                      fontSize: 14,
+                      color: Colors.black,
+                      fontFamily: 'Roboto',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 24),
+                const _ImpactCardSection(),
+                const SizedBox(height: 30),
+              ],
             ),
-          ],
-        ),
-      ),
-      body: SafeArea(
-        child: SingleChildScrollView(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: <Widget>[
-              const SizedBox(height: 30),
-              _SearchBarSection(controller: controller),
-              const SizedBox(height: 24),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Pilih Tindak Penanganan',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  desc,
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              _ActionButtonsSection(cameras: cameras),
-              const SizedBox(height: 24),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 24.0),
-                child: Container(
-                  height: 1,
-                  width: double.infinity,
-                  color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Dampak di Masa Depan',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontFamily: 'Nunito',
-                    fontWeight: FontWeight.bold,
-                    color: AppColors.darkMossGreen,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 24.0),
-                child: Text(
-                  'Tindakan yang kamu lakukan akan menentukan masa depan bumi.',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.black,
-                    fontFamily: 'Roboto',
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              const _ImpactCardSection(),
-              const SizedBox(height: 30),
-            ],
           ),
         ),
       ),
