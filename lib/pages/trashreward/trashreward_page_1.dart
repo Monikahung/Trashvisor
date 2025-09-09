@@ -103,7 +103,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 35.0),
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
