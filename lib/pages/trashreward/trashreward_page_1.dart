@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 // Ganti 'trashvisor' dengan nama proyek Anda jika berbeda
 import 'package:trashvisor/core/colors.dart';
+import 'widgets/mission_card.dart'; // <-- IMPORT WIDGET YANG SUDAH DIPISAH
 
 class EcoRewardPage extends StatefulWidget {
   const EcoRewardPage({super.key});
@@ -136,7 +137,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                     fontWeight: FontWeight.bold,
                     fontSize: 16,
                     color: AppColors.deepForestGreen,
-                    fontFamily: 'Nunito', // <-- FONT NUNITO
+                    fontFamily: 'Nunito',
                   ),
                 ),
                 const Spacer(),
@@ -146,7 +147,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                     'Riwayat >',
                     style: TextStyle(
                       color: AppColors.darkMossGreen,
-                      fontFamily: 'Roboto', // <-- FONT ROBOTO
+                      fontFamily: 'Roboto',
                     ),
                   ),
                 ),
@@ -159,7 +160,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
                   color: AppColors.deepForestGreen,
-                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                  fontFamily: 'Roboto',
                 )
             ),
             const SizedBox(height: 8),
@@ -173,7 +174,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
                       color: AppColors.deepForestGreen,
-                      fontFamily: 'Roboto', // <-- FONT ROBOTO
+                      fontFamily: 'Roboto',
                     )
                 ),
               ],
@@ -192,7 +193,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 style: const TextStyle(
                   fontSize: 12,
                   color: AppColors.darkMossGreen,
-                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                  fontFamily: 'Roboto',
                 )
             ),
           ],
@@ -279,7 +280,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 16,
-                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                  fontFamily: 'Roboto',
                 ),
               ),
             ),
@@ -296,7 +297,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
-                  fontFamily: 'Roboto', // <-- FONT ROBOTO
+                  fontFamily: 'Roboto',
                 ),
               ),
             ),
@@ -355,7 +356,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           day,
           style: const TextStyle(
             fontSize: 12,
-            fontFamily: 'Roboto', // <-- FONT ROBOTO
+            fontFamily: 'Roboto',
           ),
         ),
       ],
@@ -650,130 +651,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.white,
         ),
       ],
-    );
-  }
-}
-
-// Widget Terpisah untuk Kartu Misi
-class MissionCard extends StatelessWidget {
-  final IconData iconData;
-  final String title;
-  final String points;
-  final Color cardColor;
-  final Color iconAndTextColor;
-  final Color buttonBgColor;
-  final Color iconBgColor;
-  final Color iconBorderColor;
-  final Color pointsBorderColor;
-  final Color pointsTextColor;
-
-  const MissionCard({
-    super.key,
-    required this.iconData,
-    required this.title,
-    required this.points,
-    required this.cardColor,
-    this.iconAndTextColor = AppColors.white,
-    this.buttonBgColor = AppColors.white,
-    required this.iconBgColor,
-    required this.iconBorderColor,
-    required this.pointsBorderColor,
-    required this.pointsTextColor,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cardColor,
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: iconBgColor,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: iconBorderColor,
-                width: 2,
-              ),
-            ),
-            child: Icon(iconData, color: iconAndTextColor, size: 28),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                    title,
-                    style: TextStyle(
-                      color: iconAndTextColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      fontFamily: 'Nunito', // <-- FONT NUNITO
-                    )
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: pointsBorderColor,
-                      width: 1.5,
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.monetization_on,
-                        color: pointsTextColor,
-                        size: 14,
-                      ),
-                      const SizedBox(width: 4),
-                      Text(
-                          points,
-                          style: TextStyle(
-                            color: pointsTextColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Nunito', // <-- FONT NUNITO
-                          )
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 12),
-          ElevatedButton(
-            onPressed: () {},
-            style: ElevatedButton.styleFrom(
-              backgroundColor: iconBgColor,
-              foregroundColor: iconAndTextColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-              side: BorderSide(
-                color: iconBorderColor,
-                width: 2,
-              ),
-              elevation: 3,
-            ),
-            child: const Text(
-              'Mulai',
-              style: TextStyle(fontFamily: 'Nunito'), // <-- FONT NUNITO
-            ),
-          ),
-        ],
-      ),
     );
   }
 }
