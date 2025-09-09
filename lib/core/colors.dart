@@ -14,17 +14,12 @@ class AppColors {
   static const Color avocadoGreen = Color(0xFF678E35);
   static const Color lightSageGreen = Color(0xFFC7DFA7);
 
-// Warna hijau tua utama untuk latar belakang bagian bawah
   static const Color rewardGreenPrimary = Color(0xFF5E8B4C);
-  // Warna hijau lebih terang untuk tab level yang aktif
   static const Color rewardGreenLight = Color(0xFF86B970);
-  // Warna hijau untuk kartu-kartu tugas
   static const Color rewardGreenCard = Color(0xFF6F9A5E);
-  // Warna emas untuk koin & highlight progress bar
   static const Color rewardGold = Color(0xFFF9A825);
-  // Warna putih semi-transparan untuk kartu profil
   static const Color rewardWhiteTransparent = Color.fromRGBO(255, 255, 255, 0.85);
-
   static const Color rewardCardBg = Color(0xFFA2C96C);
+  static const Color rewardCardIkonBorder = Color(0xFF447D3A);
   static const Color rewardCardBorder = Color(0xFF719325);
 }

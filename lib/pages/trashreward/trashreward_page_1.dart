@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+// Ganti 'trashvisor' dengan nama proyek Anda jika berbeda
 import 'package:trashvisor/core/colors.dart';
 
 class EcoRewardPage extends StatefulWidget {
@@ -31,7 +32,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       clipBehavior: Clip.none,
       children: [
         Image.asset(
-          'assets/images/reward_header.png',
+          'assets/images/reward_header.png', // Pastikan nama file ini benar
           width: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
@@ -101,7 +102,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     ];
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal:35.0),
+      padding: const EdgeInsets.symmetric(horizontal: 35.0),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -177,6 +178,15 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
 
   // Bagian Daftar Misi dengan Latar Belakang Baru
   Widget _buildMissionsSection() {
+    Color missionsBgColor;
+    if (_selectedLevelIndex == 0) {
+      missionsBgColor = AppColors.mossGreen; // Warna untuk Bronze
+    } else if (_selectedLevelIndex == 1) {
+      missionsBgColor = AppColors.rewardCardBg; // Warna untuk Silver
+    } else {
+      missionsBgColor = AppColors.lightSageGreen; // Warna untuk Gold
+    }
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
@@ -192,18 +202,29 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           children: [
             _buildDailyCheckInSection(),
             const SizedBox(height: 20),
-            _buildLevelTabs(),
-            const SizedBox(height: 20),
-            if (_selectedLevelIndex == 0) _buildBronzeMissions(),
-            if (_selectedLevelIndex == 1) _buildSilverMissions(),
-            if (_selectedLevelIndex == 2) _buildGoldMissions(),
+            Container(
+              padding: const EdgeInsets.all(16.0),
+              decoration: BoxDecoration(
+                color: missionsBgColor,
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Column(
+                children: [
+                  _buildLevelTabs(),
+                  const SizedBox(height: 20),
+                  if (_selectedLevelIndex == 0) _buildBronzeMissions(),
+                  if (_selectedLevelIndex == 1) _buildSilverMissions(),
+                  if (_selectedLevelIndex == 2) _buildGoldMissions(),
+                ],
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 
-  // --- FUNGSI TUGAS HARIAN YANG DIPERBARUI ---
+  // Fungsi Tugas Harian
   Widget _buildDailyCheckInSection() {
     final days = [
       {'day': 'Senin', 'points': '+10', 'completed': true, 'isCurrent': false},
@@ -278,14 +299,13 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // --- FUNGSI ITEM HARI YANG DIPERBARUI ---
+  // Fungsi Item Hari (TANPA TEKS POIN)
   Widget _buildDayItem({required String day, required String points, required bool isCompleted, required bool isCurrent}) {
     bool hasCoin = isCompleted || isCurrent;
 
     return Column(
       children: [
-        Text(points, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-        const SizedBox(height: 4),
+        // Teks poin dihapus dari sini
         Container(
           width: 40,
           height: 40,
@@ -298,11 +318,10 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             ),
           ),
           child: hasCoin
-              ? Padding(
-            padding: const EdgeInsets.all(4.0),
-            child: Image.asset(
-              'assets/images/reward_coins_icon.png',
-            ),
+              ? Icon(
+            Icons.monetization_on,
+            color: isCurrent ? AppColors.white : Colors.amber.shade700,
+            size: 24,
           )
               : null,
         ),
@@ -312,9 +331,14 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Tab Level
+  // Tab Level dengan Warna Dinamis
   Widget _buildLevelTabs() {
-    final levels = ['Bronze', 'Silver', 'Gold'];
+    final levelsData = [
+      {'name': 'Bronze', 'color': AppColors.lightSageGreen, 'iconColor': Colors.brown.shade400},
+      {'name': 'Silver', 'color': AppColors.oliveGreen, 'iconColor': Colors.grey.shade500},
+      {'name': 'Gold', 'color': AppColors.mossGreen, 'iconColor': Colors.amber.shade700},
+    ];
+
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
@@ -324,25 +348,40 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
-        children: List.generate(levels.length, (index) {
+        children: List.generate(levelsData.length, (index) {
           final isSelected = _selectedLevelIndex == index;
-          return GestureDetector(
-            onTap: () {
-              setState(() {
-                _selectedLevelIndex = index;
-              });
-            },
-            child: Container(
-              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 30),
-              decoration: BoxDecoration(
-                color: isSelected ? AppColors.rewardGreenLight : AppColors.transparent,
-                borderRadius: BorderRadius.circular(30),
-              ),
-              child: Text(
-                levels[index],
-                style: TextStyle(
-                  color: isSelected ? AppColors.white : AppColors.darkMossGreen,
-                  fontWeight: FontWeight.bold,
+          final level = levelsData[index];
+          return Expanded(
+            child: GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedLevelIndex = index;
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.symmetric(horizontal: 4),
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                decoration: BoxDecoration(
+                  color: isSelected ? (level['color'] as Color) : Colors.transparent,
+                  borderRadius: BorderRadius.circular(30),
+                ),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(
+                      Icons.stars,
+                      color: isSelected ? AppColors.white : (level['iconColor'] as Color),
+                      size: 20,
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      level['name'] as String,
+                      style: TextStyle(
+                        color: isSelected ? AppColors.white : AppColors.darkMossGreen,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -359,37 +398,79 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
         MissionCard(
           iconData: Icons.calendar_today_outlined,
           title: 'Check-in harian selama 3 hari',
-          points: '+25 px',
+          points: '+50 poin',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 1x',
-          points: '+25 px',
+          title: 'Gunakan Trash Vision sebanyak 1 kali',
+          points: '+70 poin px',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
-          title: 'Gunakan Chatbot AI sebanyak 1x',
-          points: '+25 px',
+          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 3 kali',
+          points: '+60 poin',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
-          title: 'Cek Trash Location sebanyak 1x',
-          points: '+25 px',
+          title: 'Cek Trash Location sebanyak 3 kali',
+          points: '+60 poin',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
-          title: 'Gunakan Menu TrashTime Capsule sebanyak 1x',
-          points: '+25 px',
+          title: 'Gunakan Trash Capsule sebanyak 1 kali',
+          points: '+60 poin',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.eco_outlined,
           title: 'Foto sampah organik',
           points: '+25 px',
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.black,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
         ),
       ],
     );
@@ -401,38 +482,68 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       children: const [
         MissionCard(
           iconData: Icons.calendar_today_outlined,
-          title: 'Check-in harian selama 3 hari',
-          points: '+25 px',
+          title: 'Check-in harian',
+          points: '+50 poin',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 3x',
-          points: '+25 px',
+          title: 'Gunakan Trash Vision sebanyak 3 kali',
+          points: '+80 poin',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
-          title: 'Gunakan Chatbot AI sebanyak 3x',
-          points: '+25 px',
+          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 5 kali',
+          points: '+70 poin',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
-          title: 'Cek Trash Location sebanyak 3x',
-          points: '+25 px',
+          title: 'Cek Trash Location sebanyak 5 kali',
+          points: '+70 poin',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
-          title: 'Gunakan Menu TrashTime Capsule sebanyak 3x',
-          points: '+25 px',
+          title: 'Gunakan Trash Capsule sebanyak 2 kali',
+          points: '+70 point',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.eco_outlined,
-          title: 'Foto 1 jenis sampah anorganik',
-          points: '+25 px',
+          title: 'Deteksi sampah organik dengan Trash Vision',
+          points: '+60 poin',
+          cardColor: AppColors.oliveGreen,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.lightSageGreen,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
       ],
     );
@@ -444,38 +555,68 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       children: const [
         MissionCard(
           iconData: Icons.calendar_today_outlined,
-          title: 'Check-in harian selama 7 hari',
-          points: '+25 px',
+          title: 'Check-in harian',
+          points: '+50 poin',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 5x',
-          points: '+25 px',
+          title: 'Gunakan Trash Vision sebanyak 5 kali',
+          points: '+80 poin',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
-          title: 'Gunakan Chatbot AI sebanyak 7x',
-          points: '+25 px',
+          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 7 kali',
+          points: '+70 poin',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
-          title: 'Gunakan menu Geolokasi untuk mengetahui TPS terdekat',
-          points: '+25 px',
+          title: 'Cek Trash Location sebanyak 7 kali',
+          points: '+70 point',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
-          title: 'Gunakan TrashTime Capsule sebanyak 5x',
-          points: '+25 px',
+          title: 'Gunakan Trash Capsule sebanyak kali',
+          points: '+70 poin',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
         SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_roll_outlined,
-          title: 'Rekam membuang sampah pada tempatnya',
-          points: '+25 px',
+          title: 'Rekam membuang sampah daun pada tempatnya',
+          points: '+60 poin',
+          cardColor: AppColors.mossGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.white,
         ),
       ],
     );
@@ -487,21 +628,34 @@ class MissionCard extends StatelessWidget {
   final IconData iconData;
   final String title;
   final String points;
+  final Color cardColor;
+  final Color iconAndTextColor;
+  final Color buttonBgColor;
+  final Color iconBgColor;
+  final Color iconBorderColor;
+  final Color pointsBorderColor;
+  final Color pointsTextColor;
 
   const MissionCard({
     super.key,
     required this.iconData,
     required this.title,
     required this.points,
+    required this.cardColor,
+    this.iconAndTextColor = AppColors.white,
+    this.buttonBgColor = AppColors.white,
+    required this.iconBgColor,
+    required this.iconBorderColor,
+    required this.pointsBorderColor,
+    required this.pointsTextColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    // ... (kode ini tidak berubah)
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: AppColors.rewardGreenCard,
+        color: cardColor,
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(
@@ -509,30 +663,56 @@ class MissionCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: AppColors.rewardGreenPrimary.withOpacity(0.5),
+              color: iconBgColor,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(
+                color: iconBorderColor,
+                width: 2,
+              ),
             ),
-            child: Icon(iconData, color: AppColors.white, size: 28),
+            child: Icon(iconData, color: iconAndTextColor, size: 28),
           ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: const TextStyle(color: AppColors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                Text(
+                    title,
+                    style: TextStyle(
+                        color: iconAndTextColor,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15
+                    )
+                ),
                 const SizedBox(height: 4),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
-                    color: AppColors.rewardGold.withOpacity(0.2),
+                    color: Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(
+                      color: pointsBorderColor,
+                      width: 1.5,
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.monetization_on, color: AppColors.rewardGold, size: 14),
+                      Icon(
+                        Icons.monetization_on,
+                        color: pointsTextColor,
+                        size: 14,
+                      ),
                       const SizedBox(width: 4),
-                      Text(points, style: const TextStyle(color: AppColors.rewardGold, fontSize: 12, fontWeight: FontWeight.bold)),
+                      Text(
+                          points,
+                          style: TextStyle(
+                              color: pointsTextColor,
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold
+                          )
+                      ),
                     ],
                   ),
                 ),
@@ -543,11 +723,16 @@ class MissionCard extends StatelessWidget {
           ElevatedButton(
             onPressed: () {},
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.rewardGreenLight,
-              foregroundColor: AppColors.white,
+              backgroundColor: iconBgColor,
+              foregroundColor: iconAndTextColor,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
+              side: BorderSide(
+                color: iconBorderColor,
+                width: 2,
+              ),
+              elevation: 3,
             ),
             child: const Text('Mulai'),
           ),
