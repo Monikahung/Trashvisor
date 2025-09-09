@@ -161,7 +161,7 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     });
   }
 
-  // === Helper: selalu sediakan 3 narasi walau server gagal ===
+  // === Helper: selalu sediakan 3 narasi walau server gagal === 
   List<CapsuleItem> _fallbackItems(String waste, {required bool good}) {
     final w = waste.isEmpty ? 'sampah' : waste.toLowerCase();
     if (good) {
