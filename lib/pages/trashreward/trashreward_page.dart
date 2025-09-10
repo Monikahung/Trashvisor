@@ -1,7 +1,8 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-// Ganti 'trashvisor' dengan nama proyek Anda jika berbeda
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trashvisor/core/colors.dart';
-import 'widgets/mission_card.dart'; // <-- IMPORT WIDGET YANG SUDAH DIPISAH
+import 'widgets/mission_card.dart';
 
 class EcoRewardPage extends StatefulWidget {
   const EcoRewardPage({super.key});
@@ -11,7 +12,99 @@ class EcoRewardPage extends StatefulWidget {
 }
 
 class _EcoRewardPageState extends State<EcoRewardPage> {
-  int _selectedLevelIndex = 0; // 0: Bronze, 1: Silver, 2: Gold
+  final List<Map<String, dynamic>> _levelThresholds = [
+    {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
+    {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
+    {'name': 'Gold', 'min_score': 3000, 'max_score': 6000},
+  ];
+
+  // (REVISI) Hapus _selectedLevelIndex
+  // int _selectedLevelIndex = 0; // Tidak lagi dibutuhkan
+
+  // (REVISI) Buat variabel untuk menyimpan data profil dan level
+  late final Future<Map<String, dynamic>> _profileData;
+
+  @override
+  void initState() {
+    super.initState();
+    // (REVISI) Panggil fungsi _loadProfileAndLevelInfo() di initState
+    // untuk mengambil data saat halaman dimuat
+    _profileData = _loadProfileAndLevelInfo();
+  }
+
+  Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+
+    if (user == null) {
+      return {
+        'name': 'Pengguna',
+        'score': 0,
+        'level_name': 'Bronze',
+        'progress_text': '1000 poin menuju level Silver',
+        'progress_value': 0.0,
+      };
+    }
+
+    try {
+      final row = await client
+          .from('profiles')
+          .select('full_name, score') // Cukup ambil full_name dan score
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (row == null) {
+        throw Exception('User profile not found.');
+      }
+
+      final fullName = (row['full_name'] as String?)?.trim() ?? user.email?.split('@').first ?? 'Pengguna';
+      final score = row['score'] as int? ?? 0;
+
+      final currentLevel = _levelThresholds.firstWhere(
+        (level) => score >= (level['min_score'] as int) && score < (level['max_score'] as int),
+        orElse: () => _levelThresholds.last,
+      );
+
+      String progressText;
+      double progressValue;
+
+      if (currentLevel['name'] == 'Gold') {
+        // Logika khusus untuk level Gold
+        final goldMinScore = currentLevel['min_score'] as int;
+        final goldMaxScore = currentLevel['max_score'] as int;
+        final range = goldMaxScore - goldMinScore;
+        progressValue = range > 0 ? (score - goldMinScore) / range : 0.0;
+        progressText = '${goldMaxScore - score} poin menuju batas akhir';
+      } else {
+        // Logika untuk level Bronze dan Silver
+        final nextLevelIndex = _levelThresholds.indexOf(currentLevel) + 1;
+        final nextLevel = _levelThresholds[nextLevelIndex];
+        final nextLevelMinScore = nextLevel['min_score'] as int;
+        final currentLevelMinScore = currentLevel['min_score'] as int;
+        
+        final range = nextLevelMinScore - currentLevelMinScore;
+        progressValue = range > 0 ? (score - currentLevelMinScore) / range : 1.0;
+        progressText = '${nextLevelMinScore - score} poin menuju level ${nextLevel['name']}';
+      }
+
+      return {
+        'name': fullName,
+        'score': score,
+        'level_name': currentLevel['name'] as String,
+        'progress_text': progressText,
+        'progress_value': progressValue,
+      };
+    } catch (e) {
+      debugPrint('Error loading profile and level info: $e');
+      return {
+        'name': 'Pengguna',
+        'score': 0,
+        'level_name': 'Bronze',
+        'progress_text': '1000 poin menuju level Silver',
+        'progress_value': 0.0,
+      };
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -20,25 +113,35 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
         child: Column(
           children: [
             _buildHeaderSection(),
-            _buildMissionsSection(),
+            // (REVISI) Tampilkan bagian misi sesuai data dari FutureBuilder
+            FutureBuilder<Map<String, dynamic>>(
+              future: _profileData,
+              builder: (context, snapshot) {
+                if (!snapshot.hasData) {
+                  return _buildMissionsSection(levelName: 'Bronze'); // Default saat loading
+                }
+                
+                final levelName = snapshot.data!['level_name'] as String;
+                return _buildMissionsSection(levelName: levelName);
+              },
+            ),
           ],
         ),
       ),
     );
   }
 
-  // Bagian Header dengan Ilustrasi dan Kartu Profil
   Widget _buildHeaderSection() {
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Image.asset(
-          'assets/images/reward_header.png', // Pastikan nama file ini benar
+          'assets/images/reward_header.png',
           width: double.infinity,
           fit: BoxFit.cover,
           errorBuilder: (context, error, stackTrace) {
             return const SizedBox(
-              height: 250, // Sesuaikan tinggi dengan desain
+              height: 250,
               child: Center(
                 child: Text('Gagal memuat gambar header.'),
               ),
@@ -63,7 +166,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // App Bar dengan judul statis
   Widget _buildAppBar() {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -97,124 +199,176 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Kartu Profil yang dinamis
   Widget _buildProfileCard() {
-    final levels = ["Bronze", "Silver", "Gold"];
-    final progressTexts = [
-      "-231 points menuju level Silver",
-      "-829 points menuju level Gold",
-      "Anda sudah mencapai level tertinggi"
-    ];
+    return FutureBuilder<Map<String, dynamic>>(
+      future: _profileData,
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return _buildProfileCardPlaceholder();
+        }
+        
+        final data = snapshot.data!;
+        final name = data['name'] as String;
+        final score = data['score'] as int;
+        final levelName = data['level_name'] as String;
+        final progressText = data['progress_text'] as String;
+        final progressValue = data['progress_value'] as double;
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 20.0),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: AppColors.rewardCardBg.withAlpha((255 * 0.85).round()),
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: AppColors.rewardCardBorder,
-            width: 2,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: AppColors.black.withAlpha((255 * 0.1).round()),
-              blurRadius: 10,
-              offset: const Offset(0, 5),
-            ),
-          ],
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                const CircleAvatar(
-                  backgroundColor: Colors.brown,
-                  child: Icon(Icons.star, color: Colors.white),
-                ),
-                const SizedBox(width: 8),
-                Text(
-                  'Level ${levels[_selectedLevelIndex]}',
-                  style: const TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 16,
-                    color: AppColors.deepForestGreen,
-                    fontFamily: 'Nunito',
-                  ),
-                ),
-                const Spacer(),
-                TextButton(
-                  onPressed: () { /* Navigasi ke halaman riwayat */ },
-                  child: const Text(
-                    'Riwayat >',
-                    style: TextStyle(
-                      color: AppColors.darkMossGreen,
-                      fontFamily: 'Roboto',
-                    ),
-                  ),
+        // Tentukan warna ikon berdasarkan level
+        Color iconBgColor;
+        switch (levelName) {
+          case 'Bronze':
+            iconBgColor = Colors.brown.shade400;
+            break;
+          case 'Silver':
+            iconBgColor = Colors.grey.shade500;
+            break;
+          case 'Gold':
+            iconBgColor = Colors.amber.shade700;
+            break;
+          default:
+            iconBgColor = Colors.brown.shade400;
+        }
+
+        return Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20.0),
+          child: Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.rewardCardBg.withAlpha((255 * 0.85).round()),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                color: AppColors.rewardCardBorder,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.black.withAlpha((255 * 0.1).round()),
+                  blurRadius: 10,
+                  offset: const Offset(0, 5),
                 ),
               ],
             ),
-            const SizedBox(height: 8),
-            const Text(
-                'Udin Budiono',
-                style: TextStyle(
-                  fontSize: 22,
-                  fontWeight: FontWeight.bold,
-                  color: AppColors.deepForestGreen,
-                  fontFamily: 'Roboto',
-                )
-            ),
-            const SizedBox(height: 8),
-            Row(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.monetization_on, color: AppColors.rewardGold, size: 24),
-                const SizedBox(width: 8),
-                const Text(
-                    '1,771',
-                    style: TextStyle(
-                      fontSize: 20,
+                Row(
+                  children: [
+                    CircleAvatar(
+                      backgroundColor: iconBgColor,
+                      child: Icon(Icons.star, color: Colors.white),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Level $levelName',
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: AppColors.deepForestGreen,
+                        fontFamily: 'Nunito',
+                      ),
+                    ),
+                    const Spacer(),
+                    TextButton(
+                      onPressed: () { /* Navigasi ke halaman riwayat */ },
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            'Riwayat',
+                            style: TextStyle(
+                              color: AppColors.darkMossGreen,
+                              fontFamily: 'Roboto',
+                            ),
+                          ),
+                          SizedBox(width: 4),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: AppColors.darkMossGreen,
+                          ),
+                        ],
+                      ),
+                    )
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Text(
+                    name,
+                    style: const TextStyle(
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: AppColors.deepForestGreen,
                       fontFamily: 'Roboto',
                     )
                 ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(Icons.monetization_on, color: AppColors.rewardGold, size: 24),
+                    const SizedBox(width: 8),
+                    Text(
+                        score.toString(),
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.deepForestGreen,
+                          fontFamily: 'Roboto',
+                        )
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                LinearProgressIndicator(
+                  value: progressValue,
+                  backgroundColor: Colors.white.withAlpha((255 * 0.5).round()),
+                  color: AppColors.rewardGreenPrimary,
+                  minHeight: 8,
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                    progressText,
+                    style: const TextStyle(
+                      fontSize: 12,
+                      color: AppColors.darkMossGreen,
+                      fontFamily: 'Roboto',
+                    )
+                ),
               ],
             ),
-            const SizedBox(height: 16),
-            LinearProgressIndicator(
-              value: 0.7,
-              backgroundColor: Colors.white.withAlpha((255 * 0.5).round()),
-              color: AppColors.rewardGreenPrimary,
-              minHeight: 8,
-              borderRadius: BorderRadius.circular(4),
-            ),
-            const SizedBox(height: 4),
-            Text(
-                progressTexts[_selectedLevelIndex],
-                style: const TextStyle(
-                  fontSize: 12,
-                  color: AppColors.darkMossGreen,
-                  fontFamily: 'Roboto',
-                )
-            ),
-          ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildProfileCardPlaceholder() {
+    return const Padding(
+      padding: EdgeInsets.symmetric(horizontal: 20.0),
+      child: SizedBox(
+        height: 200, 
+        child: Center(
+          child: CircularProgressIndicator(color: AppColors.deepForestGreen),
         ),
       ),
     );
   }
 
-  // Bagian Daftar Misi dengan Latar Belakang Baru
-  Widget _buildMissionsSection() {
+  // (REVISI) Tambahkan parameter levelName
+  Widget _buildMissionsSection({required String levelName}) {
     Color missionsBgColor;
-    if (_selectedLevelIndex == 0) {
-      missionsBgColor = AppColors.mossGreen; // Warna untuk Bronze
-    } else if (_selectedLevelIndex == 1) {
-      missionsBgColor = AppColors.rewardCardBg; // Warna untuk Silver
+    int selectedLevelIndex;
+
+    if (levelName == 'Bronze') {
+      missionsBgColor = AppColors.mossGreen;
+      selectedLevelIndex = 0;
+    } else if (levelName == 'Silver') {
+      missionsBgColor = AppColors.rewardCardBg;
+      selectedLevelIndex = 1;
     } else {
-      missionsBgColor = AppColors.lightSageGreen; // Warna untuk Gold
+      missionsBgColor = AppColors.lightSageGreen;
+      selectedLevelIndex = 2;
     }
 
     return Container(
@@ -240,11 +394,11 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
               ),
               child: Column(
                 children: [
-                  _buildLevelTabs(),
+                  _buildLevelTabs(selectedLevelIndex), // (REVISI) Kirim index level ke tab
                   const SizedBox(height: 20),
-                  if (_selectedLevelIndex == 0) _buildBronzeMissions(),
-                  if (_selectedLevelIndex == 1) _buildSilverMissions(),
-                  if (_selectedLevelIndex == 2) _buildGoldMissions(),
+                  if (selectedLevelIndex == 0) _buildBronzeMissions(),
+                  if (selectedLevelIndex == 1) _buildSilverMissions(),
+                  if (selectedLevelIndex == 2) _buildGoldMissions(),
                 ],
               ),
             ),
@@ -254,7 +408,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Fungsi Tugas Harian
   Widget _buildDailyCheckInSection() {
     final days = [
       {'day': 'Senin', 'points': '+10', 'completed': true, 'isCurrent': false},
@@ -330,7 +483,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Fungsi Item Hari
   Widget _buildDayItem({required String day, required bool isCompleted, required bool isCurrent}) {
     bool hasCoin = isCompleted || isCurrent;
 
@@ -367,8 +519,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Tab Level dengan Warna Dinamis
-  Widget _buildLevelTabs() {
+  // (REVISI) Menerima parameter selectedLevelIndex
+  Widget _buildLevelTabs(int selectedLevelIndex) {
     final levelsData = [
       {'name': 'Bronze', 'color': AppColors.lightSageGreen, 'iconColor': Colors.brown.shade400},
       {'name': 'Silver', 'color': AppColors.oliveGreen, 'iconColor': Colors.grey.shade500},
@@ -385,15 +537,17 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
         children: List.generate(levelsData.length, (index) {
-          final isSelected = _selectedLevelIndex == index;
+          final isSelected = selectedLevelIndex == index;
           final level = levelsData[index];
           return Expanded(
             child: GestureDetector(
-              onTap: () {
-                setState(() {
-                  _selectedLevelIndex = index;
-                });
-              },
+              // onTap: () {
+              //   setState(() {
+              //     _selectedLevelIndex = index;
+              //   });
+              // },
+              // (REVISI) Menonaktifkan onTap agar tidak bisa diubah manual
+              onTap: null, 
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -407,10 +561,10 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                     Icon(
                       Icons.stars,
                       color: isSelected && level['name'] == 'Bronze'
-                        ? AppColors.black
-                        : isSelected
-                            ? AppColors.white
-                            : (level['iconColor'] as Color),
+                          ? AppColors.black
+                          : isSelected
+                          ? AppColors.white
+                          : (level['iconColor'] as Color),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -418,8 +572,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                       level['name'] as String,
                       style: TextStyle(
                         color: isSelected && level['name'] == 'Bronze'
-                        ? AppColors.black
-                        : isSelected
+                            ? AppColors.black
+                            : isSelected
                             ? AppColors.white
                             : AppColors.darkMossGreen,
                         fontWeight: FontWeight.bold,
@@ -452,7 +606,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.black,
           titleColor: AppColors.black,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
           title: 'Gunakan Trash Vision sebanyak 1 kali',
@@ -466,7 +620,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.black,
           titleColor: AppColors.black,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
           title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 3 kali',
@@ -480,7 +634,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.black,
           titleColor: AppColors.black,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
           title: 'Cek Trash Location sebanyak 3 kali',
@@ -494,7 +648,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.black,
           titleColor: AppColors.black,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
           title: 'Gunakan Trash Capsule sebanyak 1 kali',
@@ -508,7 +662,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.black,
           titleColor: AppColors.black,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.eco_outlined,
           title: 'Foto sampah organik',
@@ -526,7 +680,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Daftar Misi untuk Level Silver
   Widget _buildSilverMissions() {
     return Column(
       children: [
@@ -542,7 +695,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
           title: 'Gunakan Trash Vision sebanyak 3 kali',
@@ -555,7 +708,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
           title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 5 kali',
@@ -568,7 +721,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
           title: 'Cek Trash Location sebanyak 5 kali',
@@ -581,7 +734,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
           title: 'Gunakan Trash Capsule sebanyak 2 kali',
@@ -594,7 +747,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.eco_outlined,
           title: 'Deteksi sampah organik dengan Trash Vision',
@@ -611,7 +764,6 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // Daftar Misi untuk Level Gold
   Widget _buildGoldMissions() {
     return Column(
       children: [
@@ -627,7 +779,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_alt_outlined,
           title: 'Gunakan Trash Vision sebanyak 5 kali',
@@ -640,7 +792,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.chat_bubble_outline,
           title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 7 kali',
@@ -653,7 +805,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.location_on_outlined,
           title: 'Cek Trash Location sebanyak 7 kali',
@@ -666,7 +818,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.timelapse_outlined,
           title: 'Gunakan Trash Capsule sebanyak kali',
@@ -679,7 +831,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
         ),
-        SizedBox(height: 12),
+        const SizedBox(height: 12),
         MissionCard(
           iconData: Icons.camera_roll_outlined,
           title: 'Rekam membuang sampah daun pada tempatnya',
