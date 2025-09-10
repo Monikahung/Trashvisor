@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:trashvisor/core/colors.dart';
-import 'package:trashvisor/pages/trashreward/trashreward_page_1.dart';
+import 'package:trashvisor/pages/trashreward/trashreward_page.dart';
 import 'profile.dart';
 import 'notifications.dart';
 import '../trashvision/scan_camera.dart';
