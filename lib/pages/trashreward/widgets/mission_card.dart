@@ -14,7 +14,7 @@ class MissionCard extends StatelessWidget {
   final Color pointsTextColor;
   final Color titleColor;
 
-  // (NEW) interaksi tombol/status
+  // interaksi tombol/status
   final String? buttonText;     // default: 'Mulai'
   final VoidCallback? onPressed;
   final bool isCompleted;
@@ -32,7 +32,6 @@ class MissionCard extends StatelessWidget {
     required this.pointsBorderColor,
     required this.pointsTextColor,
     required this.titleColor,
-    // (NEW)
     this.buttonText,
     this.onPressed,
     this.isCompleted = false,

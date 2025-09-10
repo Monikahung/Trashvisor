@@ -14,7 +14,7 @@ class EcoRewardPage extends StatefulWidget {
 }
 
 class _EcoRewardPageState extends State<EcoRewardPage>
-    with SingleTickerProviderStateMixin { // (NEW) untuk top-toast
+    with SingleTickerProviderStateMixin {
   String _formattedDate = '';
 
   final List<Map<String, dynamic>> _levelThresholds = const [
@@ -23,14 +23,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     {'name': 'Gold', 'min_score': 3000, 'max_score': 6000},
   ];
 
-  // (PERBAIKAN) biar bisa di-refresh setelah selesai misi
+  // dipakai agar UI bisa di-refresh setelah poin berubah
   late Future<Map<String, dynamic>> _profileData;
   late Future<List<_DayState>> _dailyRow;
 
-  // (NEW) cache tombol selesai per-misi (UI)
+  // cache status misi “hari ini” untuk mengganti tombol Mulai→Selesai
   final Set<String> _completedMissionKeys = {};
 
-  // ------------------------ (NEW) Top-toast (success) ------------------------
+  // ------------------------ Top-toast (success) ------------------------
   late final AnimationController _toastCtl;
   OverlayEntry? _toastEntry;
   Timer? _toastTimer;
@@ -43,6 +43,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     _dailyRow = _loadDailyRowData();
     _initializeDate();
 
+    // animator toast
     _toastCtl = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 220),
@@ -53,6 +54,9 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           _toastEntry = null;
         }
       });
+
+    // Prefetch misi hari ini supaya tombol langsung “Selesai” kalau sudah done.
+    _prefetchCompletedToday();
   }
 
   @override
@@ -103,12 +107,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline, color: Colors.white, size: 20),
+                      const Icon(Icons.check_circle_outline,
+                          color: Colors.white, size: 20),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
                           _toastMsg,
-                          style: TextStyle(color: fg, fontSize: 14, fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ],
@@ -125,11 +134,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
 
     _toastCtl.forward(from: 0);
-    _toastTimer = Timer(const Duration(milliseconds: 1200), () {
+
+    // 🔴 PENTING: durasi toast diperpanjang supaya jelas terlihat
+    _toastTimer = Timer(const Duration(milliseconds: 2500), () {
       _toastCtl.reverse();
     });
   }
-  // --------------------------------------------------------------------------
+  // --------------------------------------------------------------------
 
   @override
   Widget build(BuildContext context) => _buildRoot(context);
@@ -165,16 +176,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           .eq('id', user.id)
           .maybeSingle();
 
-      if (row == null) {
-        throw Exception('User profile not found.');
-      }
+      if (row == null) throw Exception('User profile not found.');
 
       final fullNameFromRow = (row['full_name'] as String?)?.trim();
       final fullName = (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
           ? fullNameFromRow
           : (user.email?.split('@').first ?? 'Pengguna');
 
-      final score = row['score'] as int? ?? 0;
+      final score = (row['score'] as num?)?.toInt() ?? 0;
 
       final currentLevel = _levelThresholds.firstWhere(
         (l) => score >= (l['min_score'] as int) && score < (l['max_score'] as int),
@@ -224,15 +233,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   Future<List<_DayState>> _loadDailyRowData() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
-    final now = DateTime.now();
-    final today = _dateOnly(now);
+    final today = _dateOnly(DateTime.now());
 
     if (user == null) {
       // semua abu-abu, hari ini diborder hijau
       return _weekSkeleton(today, today);
     }
 
-    // ambil tanggal dibuatnya akun (profiles.created_at); fallback: today
+    // ambil tanggal dibuatnya akun; fallback: today
     DateTime createdAt = today;
     try {
       final prof = await client
@@ -244,15 +252,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       if (prof != null && prof['created_at'] != null) {
         createdAt = _dateOnly(DateTime.parse(prof['created_at'].toString()));
       }
-    } catch (_) {
-      // ignore, pakai today
-    }
+    } catch (_) {}
 
-    // window minggu ini: Senin..Minggu
+    // Window minggu ini: Senin..Minggu
     final monday = _mondayOf(today);
     final sunday = monday.add(const Duration(days: 6));
 
-    // (PERBAIKAN) ambil mission_history minggu ini: tandai sukses & ada aktivitas
+    // Ambil mission_history minggu ini
     final Set<DateTime> successDays = {};
     final Set<DateTime> activityDays = {};
     try {
@@ -268,57 +274,61 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         if (dStr == null) continue;
         final d = _dateOnly(DateTime.parse(dStr.toString()));
         activityDays.add(d); // ada baris apapun -> ada aktivitas
+
         final status = (r['status'] ?? '').toString().toLowerCase();
+        // ✅ status kita "completed:<key>" → tetap terdeteksi
         final ok = ['done', 'completed', 'success', 'selesai', 'finish']
-            .any((k) => status.contains(k)); // status "completed:<key>" juga masuk
+            .any((k) => status.contains(k));
         if (ok) successDays.add(d);
       }
     } catch (e) {
       debugPrint('err load mission_history: $e');
     }
 
-    // (PERBAIKAN) rakit 7 hari — eligible = created_at..today
+    // Rakit 7 hari
     final labels = const [
-      'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'
+      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
     ];
     final List<_DayState> result = [];
     for (int i = 0; i < 7; i++) {
       final d = monday.add(Duration(days: i));
       final beforeCreated = d.isBefore(createdAt);
       final inFuture = d.isAfter(today);
-      final eligible = !(beforeCreated || inFuture); // (PERBAIKAN)
+      final eligible = !(beforeCreated || inFuture);
       final isCompleted = eligible && successDays.contains(d);
-      final hasActivity = eligible && activityDays.contains(d); // (NEW)
-      final isCurrent = d.year == today.year && d.month == today.month && d.day == today.day;
+      final hasActivity = eligible && activityDays.contains(d);
+      final isCurrent = d == today;
       result.add(_DayState(
         label: labels[i],
         date: d,
         eligible: eligible,
         completed: isCompleted,
-        hasActivity: hasActivity, // (NEW)
+        hasActivity: hasActivity,
         isCurrent: isCurrent,
       ));
     }
     return result;
   }
 
-  // skeleton 1 minggu (dipakai saat belum login/dll)
+  // skeleton satu minggu saat tidak login
   List<_DayState> _weekSkeleton(DateTime createdAt, DateTime today) {
     final monday = _mondayOf(today);
-    final labels = const ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+    final labels = const [
+      'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'
+    ];
 
     final List<_DayState> out = [];
     for (int i = 0; i < 7; i++) {
       final d = DateTime(monday.year, monday.month, monday.day + i);
       final beforeCreated = d.isBefore(createdAt);
       final inFuture = d.isAfter(today);
-      final eligible = !(beforeCreated || inFuture); // (PERBAIKAN)
+      final eligible = !(beforeCreated || inFuture);
       out.add(_DayState(
         label: labels[i],
         date: d,
         eligible: eligible,
         completed: false,
-        hasActivity: false, // (NEW)
+        hasActivity: false,
         isCurrent: d.year == today.year && d.month == today.month && d.day == today.day,
       ));
     }
@@ -330,15 +340,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
 
   DateTime _mondayOf(DateTime d) {
-    // Mon=1 ... Sun=7
-    final wd = d.weekday;
+    final wd = d.weekday; // Mon=1 ... Sun=7
     return _dateOnly(d.subtract(Duration(days: wd - 1)));
   }
 
   String _yyyyMmDd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // (NEW) Poin per level (sesuai catatanmu)
+  // Poin per level (brief)
   int _pointsForLevel(String levelName) {
     switch (levelName) {
       case 'Silver': return 50;
@@ -348,7 +357,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // (NEW) daftar 5 misi
+  // 5 misi unified
   List<_MissionDef> _missions(String levelName) {
     final p = _pointsForLevel(levelName);
     return [
@@ -385,7 +394,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     ];
   }
 
-  // (NEW) tema warna kartu per level (biar nuansanya tetap)
   _LevelTheme _themeForLevel(String levelName) {
     switch (levelName) {
       case 'Silver':
@@ -425,7 +433,42 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // (NEW) helper: sudah ada baris misi ini (hari ini)?
+  // ✅ Prefetch: misi hari ini yang sudah selesai (supaya tombol langsung Selesai)
+  Future<void> _prefetchCompletedToday() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+
+    final today = _yyyyMmDd(_dateOnly(DateTime.now()));
+    try {
+      final rows = await client
+          .from('mission_history')
+          .select('status')
+          .eq('user_id', user.id)
+          .eq('mission_date', today);
+
+      final keys = <String>{};
+      for (final r in rows as List) {
+        final s = (r['status'] ?? '').toString();
+        // format "completed:<key>"
+        if (s.startsWith('completed:')) {
+          keys.add(s.substring('completed:'.length));
+        }
+      }
+
+      if (keys.isNotEmpty) {
+        setState(() {
+          _completedMissionKeys
+            ..clear()
+            ..addAll(keys);
+        });
+      }
+    } catch (e) {
+      debugPrint('prefetchCompletedToday err: $e');
+    }
+  }
+
+  // ✅ Cek apakah misi <key> sudah completed hari ini (idempotent)
   Future<bool> _alreadyCompletedToday(String missionKey) async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
@@ -446,7 +489,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // (NEW) Selesaikan misi (testing: langsung completed + poin masuk)
+  // 🔴 PENTING: Selesaikan misi (mode uji → langsung selesai & tambah poin)
   Future<void> _completeMission(_MissionDef m, int points) async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
@@ -457,44 +500,61 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
     final today = _dateOnly(DateTime.now());
     final dateStr = _yyyyMmDd(today);
-    final statusStr = 'completed:${m.key}'; // encode key misi ke kolom status
+    final statusStr = 'completed:${m.key}';
 
     try {
-      // 1) idempotent: kalau sudah completed hari ini -> jangan double poin
+      // Idempotent: kalau sudah ada jangan dobel
       if (await _alreadyCompletedToday(m.key)) {
         setState(() => _completedMissionKeys.add(m.key));
         _showTopToast('Tugas sudah selesai hari ini.');
         return;
       }
 
-      // 2) insert ke mission_history (sesuai skema yang kamu kirim)
+      // INSERT mission_history
       await client.from('mission_history').insert({
+        // 🔴 PENTING (RLS): user_id harus = auth.uid()
         'user_id': user.id,
+        // Boleh dihilangkan jika kolom punya default current_date
         'mission_date': dateStr,
         'status': statusStr,
+        // Boleh dihilangkan jika kolom punya default now()
         'created_at': DateTime.now().toUtc().toIso8601String(),
       });
 
-      // 3) update score user (simple add)
+      // UPDATE score (bigint → num)
       final prof = await client
           .from('profiles')
           .select('score')
           .eq('id', user.id)
           .maybeSingle();
-      final cur = (prof?['score'] as int?) ?? 0;
-      await client.from('profiles').update({'score': cur + points}).eq('id', user.id);
+      final cur = (prof?['score'] as num?)?.toInt() ?? 0;
 
-      // 4) refresh UI
+      await client
+          .from('profiles')
+          .update({'score': cur + points})
+          .eq('id', user.id);
+
+      // Refresh UI
       setState(() {
         _completedMissionKeys.add(m.key);
         _profileData = _loadProfileAndLevelInfo();
         _dailyRow = _loadDailyRowData();
       });
 
-      _showTopToast('Tugas selesai: +$points poin'); // (NEW) toast di atas
+      _showTopToast('Tugas selesai: +$points poin'); // toast di atas
     } catch (e) {
+      // ℹ️ Jika pakai unique index (user_id, mission_date, status),
+      // duplikat akan lempar error 23505 → anggap sudah selesai.
+      final msg = e.toString();
+      if (msg.contains('duplicate key value') || msg.contains('23505')) {
+        setState(() => _completedMissionKeys.add(m.key));
+        _showTopToast('Tugas sudah tercatat.');
+        return;
+      }
+
       debugPrint('completeMission err: $e');
-      // (PERBAIKAN) check-in wajib berhasil: kalau insert gagal, setel UI selesai
+
+      // Check-in wajib berhasil (mode uji)
       if (m.key == 'checkin') {
         setState(() {
           _completedMissionKeys.add(m.key);
@@ -503,7 +563,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         });
         _showTopToast('Check-in dicatat (mode uji).');
       } else {
-        // error lain
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Gagal menyelesaikan tugas. Coba lagi.')),
         );
@@ -785,7 +844,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 children: [
                   _buildLevelTabs(selectedLevelIndex),
                   const SizedBox(height: 20),
-                  // (NEW) 5 misi unified
+                  // 5 misi unified
                   ...missions.map((m) {
                     final isDone = _completedMissionKeys.contains(m.key);
                     return Padding(
@@ -802,7 +861,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         pointsBorderColor: theme.pointsBorderColor,
                         pointsTextColor: theme.pointsTextColor,
                         titleColor: theme.titleColor,
-                        // (NEW) interaksi tombol: langsung selesai
                         buttonText: isDone ? 'Selesai' : 'Mulai',
                         isCompleted: isDone,
                         onPressed: isDone ? null : () => _completeMission(m, m.points),
@@ -902,7 +960,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                           day: d.label,
                           eligible: d.eligible,
                           isCompleted: d.completed,
-                          hasActivity: d.hasActivity, // (NEW)
+                          hasActivity: d.hasActivity,
                           isCurrent: d.isCurrent,
                         ))
                     .toList(),
@@ -918,19 +976,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     required String day,
     required bool eligible,
     required bool isCompleted,
-    required bool hasActivity, // (NEW)
+    required bool hasActivity,
     required bool isCurrent,
   }) {
-    // (PERBAIKAN) sesuai mock:
-    // - !eligible: bulat abu-abu kosong
-    // - isCurrent && !isCompleted: border hijau + ikon uang pudar
-    // - eligible & (isCompleted || hasActivity): koin kuning
-    // - eligible & !isCurrent & !hasActivity: X merah (kosong)
+    // Mapping UI harian sesuai spesifikasi
     final bool isProgress = eligible && isCurrent && !isCompleted;
 
     Widget? inner;
     if (!eligible) {
-      inner = null;
+      inner = null; // sebelum akun dibuat / setelah hari ini
     } else if (isProgress) {
       inner = Icon(Icons.attach_money,
           color: AppColors.rewardGreenPrimary.withOpacity(0.35), size: 22);
@@ -988,7 +1042,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           final level = levelsData[index];
           return Expanded(
             child: GestureDetector(
-              onTap: null, // tidak bisa pindah manual
+              onTap: null, // level mengikuti score (tidak manual)
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1036,22 +1090,22 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 class _DayState {
   final String label;
   final DateTime date;
-  final bool eligible;    // false = sebelum akun dibuat ATAU setelah hari ini -> abu-abu kosong
-  final bool completed;   // true = ada mission_history dengan status sukses
-  final bool hasActivity; // (NEW) true = ada baris mission_history apapun
-  final bool isCurrent;   // true = hari ini -> border hijau
+  final bool eligible;    // false = sebelum akun dibuat ATAU setelah hari ini
+  final bool completed;   // true = ada mission_history status sukses
+  final bool hasActivity; // true = ada baris mission_history apapun
+  final bool isCurrent;   // true = hari ini
 
   _DayState({
     required this.label,
     required this.date,
     required this.eligible,
     required this.completed,
-    required this.hasActivity, // (NEW)
+    required this.hasActivity,
     required this.isCurrent,
   });
 }
 
-// ===================== Model & Theme bantuan (NEW) =====================
+// ===================== Model & Theme bantuan =====================
 
 class _MissionDef {
   final String key;

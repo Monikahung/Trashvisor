@@ -1,5 +1,10 @@
+// home_profile_notifications/home.dart
+import 'dart:async'; // 🔴 PENTING: untuk StreamSubscription
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:intl/intl.dart'; // untuk format 1.000
+import 'package:supabase_flutter/supabase_flutter.dart'; // 🔴 PENTING: ambil score dari DB
+
 import 'package:trashvisor/core/colors.dart';
 import 'package:trashvisor/pages/trashreward/trashreward_page.dart';
 import 'profile.dart';
@@ -11,7 +16,6 @@ import '../trashlocation/location_page.dart';
 
 // HomePage diubah menjadi StatefulWidget
 class HomePage extends StatefulWidget {
-  // HomePage sekarang menerima `cameras` sebagai argumen wajib.
   final List<CameraDescription> cameras;
 
   const HomePage({super.key, required this.cameras});
@@ -21,15 +25,89 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  // Variabel untuk menyimpan daftar kamera yang diterima.
-  // Ini akan digunakan saat menavigasi ke ScanCamera.
+  // Kamera yang diterima dari main.dart
   List<CameraDescription>? _availableCameras;
+
+  // ------------------- STATE: SCORE REALTIME -------------------
+  int _score = 0; // nilai poin user
+  bool _scoreLoaded = false; // agar bisa tampil loader / fallback saat awal
+  StreamSubscription<List<Map<String, dynamic>>>? _scoreSub; // realtime
+  final NumberFormat _nf = NumberFormat.decimalPattern('id_ID'); // 1.234
 
   @override
   void initState() {
     super.initState();
-    // Inisialisasi _availableCameras dengan widget.cameras
     _availableCameras = widget.cameras;
+    _loadScore();      // ambil skor sekali saat start
+    _subscribeScore(); // 🔴 PENTING: realtime subscribe agar ikut update
+  }
+
+  @override
+  void dispose() {
+    _scoreSub?.cancel(); // 🔴 PENTING: hindari memory leak
+    super.dispose();
+  }
+
+  // Ambil skor awal dari DB (profiles.score)
+  Future<void> _loadScore() async {
+    try {
+      final client = Supabase.instance.client;
+      final user = client.auth.currentUser;
+      if (user == null) {
+        setState(() {
+          _score = 0;
+          _scoreLoaded = true;
+        });
+        return;
+      }
+
+      final row = await client
+          .from('profiles')
+          .select('score')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      setState(() {
+        _score = (row?['score'] as num?)?.toInt() ?? 0;
+        _scoreLoaded = true;
+      });
+    } catch (e) {
+      // Kalau gagal, jangan bikin crash — tampilkan 0
+      setState(() {
+        _scoreLoaded = true;
+      });
+    }
+  }
+
+  // Realtime subscription ke tabel profiles hanya untuk baris user aktif
+  void _subscribeScore() {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+
+    // 🔴 PENTING:
+    // butuh Realtime aktif di tabel `profiles` + RLS policy pf_select
+    _scoreSub = client
+        .from('profiles')
+        .stream(primaryKey: ['id']) // wajib isi primaryKey untuk stream()
+        .eq('id', user.id)
+        .listen((rows) {
+      if (!mounted) return;
+      if (rows.isNotEmpty) {
+        final s = (rows.first['score'] as num?)?.toInt() ?? 0;
+        setState(() {
+          _score = s; // akan auto update ketika score berubah di EcoReward
+          _scoreLoaded = true;
+        });
+      }
+    });
+  }
+
+  // Helper untuk menuju halaman yang mungkin mengubah poin (EcoReward)
+  Future<void> _pushAndRefresh(Widget page) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => page));
+    // 🔁 setelah kembali, refresh manual juga (kalau realtime tidak terpanggil)
+    await _loadScore();
   }
 
   @override
@@ -44,17 +122,14 @@ class _HomePageState extends State<HomePage> {
       bottomNavigationBar: buildBottomNavigationBar(),
       floatingActionButton: FloatingActionButton(
         onPressed: () {
-          // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
           if (_availableCameras != null && _availableCameras!.isNotEmpty) {
             Navigator.push(
               context,
               MaterialPageRoute(
-                // Meneruskan _availableCameras ke ScanCamera.
                 builder: (context) => ScanCamera(cameras: _availableCameras!),
               ),
             );
           } else {
-            // Tampilkan pesan jika kamera tidak tersedia.
             ScaffoldMessenger.of(context).showSnackBar(
               const SnackBar(
                 content: Text(
@@ -77,14 +152,14 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- Metode buildHeader Anda tetap sama ---
+  // --- HEADER (angka poin real-time muncul di kiri atas) ---
   Widget buildHeader(BuildContext context) {
     return Stack(
       clipBehavior: Clip.none,
       children: [
         Container(
           height: 200,
-          decoration: BoxDecoration(
+          decoration: const BoxDecoration(
             image: DecorationImage(
               image: AssetImage('assets/images/bg_home.jpg'),
               fit: BoxFit.cover,
@@ -99,28 +174,35 @@ class _HomePageState extends State<HomePage> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: AppColors.darkOliveGreen.withAlpha(204),
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(color: Colors.white, width: 2),
                 ),
-                child: const Row(
+                // 🔴 PENTING: ganti angka statis jadi nilai dari DB
+                child: Row(
                   children: [
-                    Icon(Icons.monetization_on, color: Colors.white),
-                    SizedBox(width: 5),
-                    Text(
-                      '1,771',
-                      style: TextStyle(
-                        fontFamily: 'Roboto',
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                        color: Colors.white,
-                      ),
-                    ),
+                    const Icon(Icons.monetization_on, color: Colors.white),
+                    const SizedBox(width: 5),
+                    _scoreLoaded
+                        ? Text(
+                            _nf.format(_score), // contoh: 1.771 atau 12.345
+                            style: const TextStyle(
+                              fontFamily: 'Roboto',
+                              fontWeight: FontWeight.w600,
+                              fontSize: 13,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          ),
                   ],
                 ),
               ),
@@ -142,13 +224,8 @@ class _HomePageState extends State<HomePage> {
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: CircleAvatar(
-                        backgroundColor: AppColors.darkOliveGreen.withAlpha(
-                          204,
-                        ),
-                        child: const Icon(
-                          Icons.notifications,
-                          color: Colors.white,
-                        ),
+                        backgroundColor: AppColors.darkOliveGreen.withAlpha(204),
+                        child: const Icon(Icons.notifications, color: Colors.white),
                       ),
                     ),
                   ),
@@ -169,9 +246,7 @@ class _HomePageState extends State<HomePage> {
                         border: Border.all(color: Colors.white, width: 2),
                       ),
                       child: CircleAvatar(
-                        backgroundColor: AppColors.darkOliveGreen.withAlpha(
-                          204,
-                        ),
+                        backgroundColor: AppColors.darkOliveGreen.withAlpha(204),
                         child: const Icon(Icons.person, color: Colors.white),
                       ),
                     ),
@@ -188,11 +263,9 @@ class _HomePageState extends State<HomePage> {
           child: Container(
             height: 60,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
-            decoration: BoxDecoration(
+            decoration: const BoxDecoration(
               color: AppColors.whiteSmoke,
-              borderRadius: const BorderRadius.vertical(
-                top: Radius.circular(30),
-              ),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
             ),
             child: Row(
               children: [
@@ -210,17 +283,9 @@ class _HomePageState extends State<HomePage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Divider(
-                        color: AppColors.darkMossGreen,
-                        thickness: 1,
-                        height: 2.5,
-                      ),
-                      Divider(
-                        color: AppColors.darkMossGreen,
-                        thickness: 1,
-                        height: 2.5,
-                      ),
+                    children: const [
+                      Divider(color: AppColors.darkMossGreen, thickness: 1, height: 2.5),
+                      Divider(color: AppColors.darkMossGreen, thickness: 1, height: 2.5),
                     ],
                   ),
                 ),
@@ -232,7 +297,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- Metode buildMenuSection Anda (perlu diperbaiki navigasinya) ---
+  // --- Menu tiles ---
   Widget buildMenuSection(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.all(20.0),
@@ -247,34 +312,23 @@ class _HomePageState extends State<HomePage> {
                 title: 'Trash Vision',
                 subtitle: 'Scan sampah untuk mendapatkan detail lebih lanjut',
                 onTap: () {
-                  // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
-                  if (_availableCameras != null &&
-                      _availableCameras!.isNotEmpty) {
+                  if (_availableCameras != null && _availableCameras!.isNotEmpty) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        // Meneruskan _availableCameras ke ScanCamera.
-                        builder: (context) =>
-                            ScanCamera(cameras: _availableCameras!),
+                        builder: (context) => ScanCamera(cameras: _availableCameras!),
                       ),
                     );
                   } else {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text(
-                          'Kamera tidak tersedia. Mohon periksa izin atau perangkat.',
-                        ),
+                        content: Text('Kamera tidak tersedia. Mohon periksa izin atau perangkat.'),
                       ),
                     );
                   }
                 },
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF205304),
-                    Color(0xFF447D3A),
-                    Color(0xFF719325),
-                    Color(0xFFA2C96C),
-                  ],
+                  colors: [Color(0xFF205304), Color(0xFF447D3A), Color(0xFF719325), Color(0xFFA2C96C)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -291,12 +345,7 @@ class _HomePageState extends State<HomePage> {
                   );
                 },
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFF205304),
-                    Color(0xFF447D3A),
-                    Color(0xFF719325),
-                    Color(0xFFA2C96C),
-                  ],
+                  colors: [Color(0xFF205304), Color(0xFF447D3A), Color(0xFF719325), Color(0xFFA2C96C)],
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                 ),
@@ -314,19 +363,11 @@ class _HomePageState extends State<HomePage> {
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(
-                      builder: (context) =>
-                          TrashCapsulePage(cameras: widget.cameras),
-                    ),
+                    MaterialPageRoute(builder: (context) => TrashCapsulePage(cameras: widget.cameras)),
                   );
                 },
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFA2C96C),
-                    Color(0xFF719325),
-                    Color(0xFF447D3A),
-                    Color(0xFF205304),
-                  ],
+                  colors: [Color(0xFFA2C96C), Color(0xFF719325), Color(0xFF447D3A), Color(0xFF205304)],
                   begin: Alignment.topRight,
                   end: Alignment.bottomLeft,
                 ),
@@ -336,21 +377,12 @@ class _HomePageState extends State<HomePage> {
                 icon: Icons.card_giftcard_outlined,
                 title: 'Trash Reward',
                 subtitle: 'Kumpulkan poin dan tukar dengan lencana dan uang',
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const EcoRewardPage(),
-                    ),
-                  );
+                onTap: () async {
+                  // 🔁 setelah balik dari EcoReward, refresh skor
+                  await _pushAndRefresh(const EcoRewardPage());
                 },
                 gradient: const LinearGradient(
-                  colors: [
-                    Color(0xFFA2C96C),
-                    Color(0xFF719325),
-                    Color(0xFF447D3A),
-                    Color(0xFF205304),
-                  ],
+                  colors: [Color(0xFFA2C96C), Color(0xFF719325), Color(0xFF447D3A), Color(0xFF205304)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -365,18 +397,11 @@ class _HomePageState extends State<HomePage> {
             onTap: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const TrashChatbotPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const TrashChatbotPage()),
               );
             },
             gradient: const LinearGradient(
-              colors: [
-                Color(0xFFA2C96C),
-                Color(0xFF719325),
-                Color(0xFF447D3A),
-                Color(0xFF205304),
-              ],
+              colors: [Color(0xFFA2C96C), Color(0xFF719325), Color(0xFF447D3A), Color(0xFF205304)],
               begin: Alignment.topRight,
               end: Alignment.bottomLeft,
             ),
@@ -386,7 +411,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- Metode buildMenuItem tetap sama ---
   Widget buildMenuItem({
     required IconData icon,
     required String title,
@@ -400,8 +424,7 @@ class _HomePageState extends State<HomePage> {
         child: Container(
           padding: const EdgeInsets.all(16),
           decoration: BoxDecoration(
-            gradient:
-                gradient ??
+            gradient: gradient ??
                 LinearGradient(
                   colors: [Colors.green.shade100, Colors.green.shade200],
                   begin: Alignment.topLeft,
@@ -433,6 +456,7 @@ class _HomePageState extends State<HomePage> {
                 ),
               ),
               const SizedBox(height: 12),
+              const SizedBox(height: 6),
               Text(
                 title,
                 style: const TextStyle(
@@ -442,7 +466,6 @@ class _HomePageState extends State<HomePage> {
                   color: Colors.white,
                 ),
               ),
-              const SizedBox(height: 6),
               Text(
                 subtitle,
                 style: const TextStyle(
@@ -458,7 +481,6 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- Metode buildSingleMenuItem tetap sama ---
   Widget buildSingleMenuItem({
     required IconData icon,
     required String title,
@@ -472,8 +494,7 @@ class _HomePageState extends State<HomePage> {
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          gradient:
-              gradient ??
+          gradient: gradient ??
               LinearGradient(
                 colors: [Colors.green.shade100, Colors.green.shade200],
                 begin: Alignment.topLeft,
@@ -505,8 +526,7 @@ class _HomePageState extends State<HomePage> {
             const SizedBox(width: 15),
             Expanded(
               child: Align(
-                alignment:
-                    alignment ?? Alignment.centerLeft, // Default centerLeft
+                alignment: alignment ?? Alignment.centerLeft,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
@@ -539,7 +559,7 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // --- Metode buildBottomNavigationBar tetap sama ---
+  // Bottom nav (tidak diubah fungsinya; bisa diarahkan ke Reward juga bila mau)
   Widget buildBottomNavigationBar() {
     return BottomAppBar(
       shape: const CircularNotchedRectangle(),
@@ -547,47 +567,34 @@ class _HomePageState extends State<HomePage> {
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
           IconButton(
-            icon: const Icon(
-              Icons.home_outlined,
-              color: AppColors.darkOliveGreen,
-            ),
+            icon: const Icon(Icons.home_outlined, color: AppColors.darkOliveGreen),
             onPressed: () {},
           ),
           IconButton(
-            icon: const Icon(
-              Icons.chat_outlined,
-              color: AppColors.darkOliveGreen,
-            ),
+            icon: const Icon(Icons.chat_outlined, color: AppColors.darkOliveGreen),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const TrashChatbotPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const TrashChatbotPage()),
               );
             },
           ),
           const SizedBox(width: 48),
           IconButton(
-            icon: const Icon(
-              Icons.location_on_outlined,
-              color: AppColors.darkOliveGreen,
-            ),
+            icon: const Icon(Icons.location_on_outlined, color: AppColors.darkOliveGreen),
             onPressed: () {
               Navigator.push(
                 context,
-                MaterialPageRoute(
-                  builder: (context) => const LocationPage(),
-                ),
+                MaterialPageRoute(builder: (context) => const LocationPage()),
               );
             },
           ),
           IconButton(
-            icon: const Icon(
-              Icons.card_giftcard_outlined,
-              color: AppColors.darkOliveGreen,
-            ),
-            onPressed: () {},
+            icon: const Icon(Icons.card_giftcard_outlined, color: AppColors.darkOliveGreen),
+            onPressed: () async {
+              // opsional: buka reward dari bottom icon dan refresh score
+              await _pushAndRefresh(const EcoRewardPage());
+            },
           ),
         ],
       ),
