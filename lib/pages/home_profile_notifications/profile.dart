@@ -4,7 +4,7 @@ import 'package:trashvisor/core/colors.dart';
 // (NEW) untuk logout & tarik data user
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:camera/camera.dart';
-import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage; 
+import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage;
 
 // Widget utama untuk halaman profil pengguna.
 // (NEW) Diubah ke Stateful karena kita menambah animasi top-banner
@@ -22,6 +22,13 @@ class _ProfilePageState extends State<ProfilePage>
   OverlayEntry? _bannerEntry;
   Timer? _bannerTimer;
   String _bannerMessage = '';
+
+  // (PERBAIKAN) Definisikan ambang batas level
+  final List<Map<String, dynamic>> _levelThresholds = [
+    {'name': 'Bronze', 'min_score': 0, 'max_score': 1000, 'color': Colors.brown.shade400},
+    {'name': 'Silver', 'min_score': 1000, 'max_score': 3000, 'color': Colors.grey.shade500},
+    {'name': 'Gold', 'min_score': 3000, 'max_score': 6000, 'color': Colors.amber.shade700},
+  ];
 
   @override
   void initState() {
@@ -121,20 +128,45 @@ class _ProfilePageState extends State<ProfilePage>
   }
   // ---------------------------------------------------------------------------
 
-  // (NEW) Helper: ambil info profil (nama & email)
-  Future<Map<String, String>> _loadProfileInfo() async {
+  // (NEW) Helper: ambil info profil (nama, email & score)
+  Future<Map<String, dynamic>> _loadProfileInfo() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
 
     // fallback default kalau belum login (seharusnya tidak terjadi di halaman ini)
     if (user == null) {
-      return {'name': 'Pengguna', 'first': 'Pengguna', 'email': ''}; // (NEW) tambah 'first'
+      return {
+        'name': 'Pengguna',
+        'first': 'Pengguna',
+        'email': '',
+        'score': 0,
+        'level_name': 'Bronze',
+        'level_color': Colors.brown.shade400,
+      };
     }
 
-    // 1) coba dari user_metadata (mis. 'full_name' diset saat register)
     String? fullName;
+    int? score;
+
+    // (PERBAIKAN) Coba ambil data dari tabel profiles terlebih dahulu
+    try {
+      final row = await client
+          .from('profiles')
+          .select('full_name, score')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (row != null) {
+        fullName = (row['full_name'] as String?)?.trim();
+        score = row['score'] as int?;
+      }
+    } catch (_) {
+      // Abaikan error baca profil. Lanjut ke fallback
+    }
+
+    // 1) Jika full_name tidak ditemukan di tabel profiles, coba dari user_metadata
     final meta = user.userMetadata;
-    if (meta != null) {
+    if ((fullName == null || fullName.isEmpty) && meta != null) {
       for (final key in ['full_name', 'name', 'nama']) {
         final v = meta[key];
         if (v is String && v.trim().isNotEmpty) {
@@ -144,22 +176,7 @@ class _ProfilePageState extends State<ProfilePage>
       }
     }
 
-    // 2) kalau belum, coba tabel profiles.full_name
-    if (fullName == null || fullName.isEmpty) {
-      try {
-        final row = await client
-            .from('profiles')
-            .select('full_name')
-            .eq('id', user.id)
-            .maybeSingle();
-        final v = (row?['full_name'] as String?)?.trim();
-        if (v != null && v.isNotEmpty) fullName = v;
-      } catch (_) {
-        // abaikan error baca profil
-      }
-    }
-
-    // 3) fallback: ambil bagian depan email
+    // 2) Jika masih tidak ada, fallback: ambil bagian depan email
     final email = user.email ?? '';
     if (fullName == null || fullName.isEmpty) {
       fullName = email.split('@').first;
@@ -174,10 +191,13 @@ class _ProfilePageState extends State<ProfilePage>
           .where((w) => w.trim().isNotEmpty)
           .toList();
       if (parts.isEmpty) return 'Pengguna';
-      final chosen = parts.take(2).map((w) {
-        final lower = w.toLowerCase();
-        return lower[0].toUpperCase() + lower.substring(1);
-      }).join(' ');
+      final chosen = parts
+          .take(2)
+          .map((w) {
+            final lower = w.toLowerCase();
+            return lower[0].toUpperCase() + lower.substring(1);
+          })
+          .join(' ');
       return chosen;
     }
 
@@ -191,10 +211,20 @@ class _ProfilePageState extends State<ProfilePage>
       return lower[0].toUpperCase() + lower.substring(1);
     }
 
+    // (PERBAIKAN) Logika untuk menentukan level dan warnanya
+    final int userScore = score ?? 0;
+    final currentLevel = _levelThresholds.firstWhere(
+      (level) => userScore >= (level['min_score'] as int) && userScore < (level['max_score'] as int),
+      orElse: () => _levelThresholds.last,
+    );
+
     return {
       'name': titleTwoWords(fullName), // untuk UI (2 kata)
       'first': titleFirstWord(fullName), // (NEW) untuk goodbye (1 kata)
       'email': email,
+      'score': userScore, // (NEW) Kembalikan nilai score (jika null, gunakan 0)
+      'level_name': currentLevel['name'] as String, // (PERBAIKAN) Nama level dinamis
+      'level_color': currentLevel['color'] as Color, // (PERBAIKAN) Warna level dinamis
     };
     // selesai
   }
@@ -330,7 +360,7 @@ class _ProfilePageState extends State<ProfilePage>
       height: 50,
       decoration: BoxDecoration(
         color: AppColors.fernGreen,
-        shape: BoxShape.circle,  // lingkaran sempurna
+        shape: BoxShape.circle, // lingkaran sempurna
         border: Border.all(color: AppColors.whiteSmoke, width: 2),
       ),
       child: IconButton(
@@ -370,12 +400,15 @@ class _ProfilePageState extends State<ProfilePage>
 
   // Membangun area profil pengguna dengan foto, nama, email, level, dan koin.
   Widget _buildBagianProfilPengguna(BuildContext context) {
-    return FutureBuilder<Map<String, String>>(
-      future: _loadProfileInfo(), // (NEW) ambil nama & email dari Supabase
+    return FutureBuilder<Map<String, dynamic>>( // (NEW) Ubah tipe datanya menjadi dynamic
+      future: _loadProfileInfo(),
       builder: (context, snap) {
         final loading = !snap.hasData;
-        final name = snap.data?['name'] ?? 'Pengguna';    // 2 kata (untuk tampilan)
+        final name = snap.data?['name'] ?? 'Pengguna';
         final email = snap.data?['email'] ?? '';
+        final score = snap.data?['score'] as int? ?? 0; // (NEW) Ambil score dari snap.data
+        final levelName = snap.data?['level_name'] ?? 'Bronze';
+        final levelColor = snap.data?['level_color'] ?? Colors.brown.shade400;
 
         return Row(
           children: [
@@ -410,7 +443,7 @@ class _ProfilePageState extends State<ProfilePage>
                       fontFamily: 'Nunito',
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: AppColors.darkMossGreen
+                      color: AppColors.darkMossGreen,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -427,31 +460,11 @@ class _ProfilePageState extends State<ProfilePage>
                   // Baris untuk level dan koin.
                   Row(
                     children: [
-                      // Level pengguna (contoh: Level Silver).
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: Colors.transparent,
-                          borderRadius: BorderRadius.circular(15),
-                        ),
-                        child: const Row(
-                          children: [
-                            Icon(Icons.stars, color: Color(0xFFC0C0C0), size: 30),
-                            SizedBox(width: 4),
-                            Text(
-                              'Level Silver', 
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontFamily: 'Nunito',
-                                fontWeight: FontWeight.bold,
-                                color: AppColors.darkOliveGreen)
-                            ),
-                          ],
-                        ),
-                      ),
+                      // (PERBAIKAN) Gunakan levelName dan levelColor dinamis
+                      _buildLevelContainer(levelName, levelColor),
                       const Spacer(), // Mendorong container koin ke kanan.
                       // Saldo koin pengguna.
-                      _buildContainerKoin(1771),
+                      _buildContainerKoin(score), // (NEW) Teruskan variabel 'score'
                     ],
                   ),
                 ],
@@ -460,6 +473,32 @@ class _ProfilePageState extends State<ProfilePage>
           ],
         );
       },
+    );
+  }
+
+  // (PERBAIKAN) Widget baru untuk Container Level
+  Widget _buildLevelContainer(String levelName, Color levelColor) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.transparent,
+        borderRadius: BorderRadius.circular(15),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.stars, color: levelColor, size: 30), // Warna ikon level
+          const SizedBox(width: 4),
+          Text(
+            'Level $levelName',
+            style: TextStyle(
+              fontSize: 14,
+              fontFamily: 'Nunito',
+              fontWeight: FontWeight.bold,
+              color: levelColor, // Warna teks level
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -550,10 +589,11 @@ class _ProfilePageState extends State<ProfilePage>
                   Text(
                     hari[index],
                     style: const TextStyle(
-                      color: AppColors.whiteSmoke, 
+                      color: AppColors.whiteSmoke,
                       fontSize: 12,
                       fontFamily: 'Nunito',
-                      fontWeight: FontWeight.w700),
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
                 ],
               );
