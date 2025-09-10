@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trashvisor/core/colors.dart';
 import 'widgets/mission_card.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart';
 
 class EcoRewardPage extends StatefulWidget {
   const EcoRewardPage({super.key});
@@ -12,6 +14,9 @@ class EcoRewardPage extends StatefulWidget {
 }
 
 class _EcoRewardPageState extends State<EcoRewardPage> {
+  // Deklarasikan variabel _formattedDate di sini
+  String _formattedDate = ''; 
+  
   final List<Map<String, dynamic>> _levelThresholds = [
     {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
     {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
@@ -30,6 +35,18 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     // (REVISI) Panggil fungsi _loadProfileAndLevelInfo() di initState
     // untuk mengambil data saat halaman dimuat
     _profileData = _loadProfileAndLevelInfo();
+
+    _initializeDate();
+  }
+
+  Future<void> _initializeDate() async {
+    // Tunggu hingga data lokal untuk Indonesia dimuat
+    await initializeDateFormatting('id_ID', null);
+    
+    // Perbarui state untuk menampilkan tanggal yang diformat
+    setState(() {
+      _formattedDate = DateFormat('EEEE, dd - MM - yyyy', 'id_ID').format(DateTime.now());
+    });
   }
 
   Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
@@ -448,8 +465,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(color: AppColors.rewardGreenPrimary),
               ),
-              child: const Text(
-                'Sabtu, 23 - 08 - 2025',
+              child: Text(
+                _formattedDate,
                 style: TextStyle(
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
