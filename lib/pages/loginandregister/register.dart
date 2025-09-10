@@ -6,7 +6,7 @@ import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage;
 import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase
 
 /// ===================================================================
-///  WARNA (samakan dengan login)
+///   WARNA (samakan dengan login)
 /// ===================================================================
 class AppColors {
   static const Color green = Color(0xFF4CAF50);
@@ -26,7 +26,7 @@ class AppColors {
 }
 
 /// ===================================================================
-///  DIMENSI / KNOB UBAHAN (SEMUA JARAK/UKURAN ADA DI SINI)
+///   DIMENSI / KNOB UBAHAN (SEMUA JARAK/UKURAN ADA DI SINI)
 /// ===================================================================
 class RegisterDimens {
   // ---------- HERO ----------
@@ -81,9 +81,10 @@ const int _kMinPasswordLength = 8;
 final RegExp _hasUpper = RegExp(r'[A-Z]');
 final RegExp _hasLower = RegExp(r'[a-z]');
 final RegExp _hasDigit = RegExp(r'[0-9]');
+final RegExp _isValidEmailRegex = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
 
 /// ===================================================================
-///  (NEW) HELPER BANNER — reusable, rapi, 1 controller saja
+///   (NEW) HELPER BANNER — reusable, rapi, 1 controller saja
 /// ===================================================================
 class _TopBanner {
   final AnimationController _ctl;
@@ -99,10 +100,10 @@ class _TopBanner {
     required Duration inDur,
     required Duration outDur,
   }) : _ctl = AnimationController(
-         vsync: vsync,
-         duration: inDur,
-         reverseDuration: outDur,
-       ) {
+          vsync: vsync,
+          duration: inDur,
+          reverseDuration: outDur,
+        ) {
     _ctl.addStatusListener((status) {
       if (status == AnimationStatus.dismissed) {
         _entry?.remove();
@@ -201,7 +202,7 @@ class _TopBanner {
 }
 
 /// ===================================================================
-///  REGISTER PAGE — Opsi B: satu controller banner di-reuse
+///   REGISTER PAGE — Opsi B: satu controller banner di-reuse
 /// ===================================================================
 class RegisterPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -224,8 +225,9 @@ class _RegisterPageState extends State<RegisterPage>
   bool _obscure2 = true;
   bool _agree = false;
 
-  // (NEW) error teks di bawah field password (null = tidak tampil)
+  // (NEW) error teks di bawah field
   String? _passErrorText; // akan diisi bila tidak memenuhi syarat
+  String? _emailErrorText; // (BARU) untuk validasi live email
 
   // Link ke Login
   late final TapGestureRecognizer _toLogin;
@@ -254,26 +256,29 @@ class _RegisterPageState extends State<RegisterPage>
 
     // (NEW) Validasi password live saat user mengetik (tanpa ubah bentuk _AppTextField)
     _passC.addListener(_validatePasswordLive);
+
+    // (BARU) Tambah listener untuk validasi email
+    _emailC.addListener(_validateEmailLive);
   }
 
   @override
   void dispose() {
     _toLogin.dispose();
     _nameC.dispose();
+    _emailC.removeListener(_validateEmailLive); // (BARU) lepas listener
     _emailC.dispose();
-    _passC.removeListener(_validatePasswordLive); // (NEW) lepas listener
+    _passC.removeListener(_validatePasswordLive);
     _passC.dispose();
     _confirmC.dispose();
 
-    _banner.dispose(); // (NEW) rapikan helper
+    _banner.dispose();
     super.dispose();
   }
 
   // ---------------------- Validasi ringkas ----------------------
   bool _isBlank(String s) => s.trim().isEmpty;
   bool _isValidEmail(String s) {
-    final re = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$');
-    return re.hasMatch(s.trim());
+    return _isValidEmailRegex.hasMatch(s.trim());
   }
 
   // (NEW) buat pesan error dinamis yang informatif (di bawah field password)
@@ -285,8 +290,16 @@ class _RegisterPageState extends State<RegisterPage>
     if (!_hasLower.hasMatch(s)) need.add('huruf kecil');
     if (!_hasDigit.hasMatch(s)) need.add('angka');
     if (need.isEmpty) return null;
-    // NB: kode unik/simbol opsional → tidak dimasukkan ke pesan
-    return 'Password harus ${need.join(', ')}.';
+    return 'Password harus mengandung ${need.join(', ')}.';
+  }
+
+  // (BARU) buat pesan error dinamis untuk email
+  String? _buildEmailError(String s) {
+    if (s.isEmpty) return null;
+    if (!_isValidEmail(s)) {
+      return 'Format email tidak valid. Contoh: nama@contoh.com';
+    }
+    return null;
   }
 
   // (NEW) Listener untuk update error saat mengetik password
@@ -297,9 +310,16 @@ class _RegisterPageState extends State<RegisterPage>
     }
   }
 
+  // (BARU) Listener untuk update error saat mengetik email
+  void _validateEmailLive() {
+    final msg = _buildEmailError(_emailC.text);
+    if (msg != _emailErrorText) {
+      setState(() => _emailErrorText = msg);
+    }
+  }
+
   // ---------------------- Aksi tombol Kirim ----------------------
   void _onSubmit() async {
-    // Cek berurutan dari atas agar pesan spesifik
     if (_isBlank(_nameC.text)) {
       _banner.show(
         context,
@@ -309,16 +329,11 @@ class _RegisterPageState extends State<RegisterPage>
       );
       return;
     }
-    if (_isBlank(_emailC.text)) {
-      _banner.show(
-        context,
-        'Email anda belum terisi',
-        sideMargin: RegisterDimens.bannerSideMargin,
-        showFor: RegisterDimens.bannerShowTime,
-      );
-      return;
-    }
-    if (!_isValidEmail(_emailC.text)) {
+    
+    // (BARU) Validasi email di sini juga, tapi kita pakai fungsi _buildEmailError
+    final emailErr = _buildEmailError(_emailC.text);
+    if (emailErr != null) {
+      setState(() => _emailErrorText = emailErr);
       _banner.show(
         context,
         'Format email tidak valid',
@@ -328,7 +343,6 @@ class _RegisterPageState extends State<RegisterPage>
       return;
     }
 
-    // (NEW) Cek password kuat → tampilkan error di bawah field, bukan banner
     final passErr = _buildPasswordError(_passC.text);
     if (passErr != null) {
       setState(() => _passErrorText = passErr);
@@ -363,24 +377,17 @@ class _RegisterPageState extends State<RegisterPage>
       return;
     }
 
-    // Kirim data register ke backend
-    // (NEW) Registrasi dengan Supabase Auth
     try {
       final supa = Supabase.instance.client;
 
-      // (NOTE) metadata 'full_name' akan ikut ke user_metadata dan (opsional)
-      // bisa dimirror ke table profiles via trigger SQL yang sudah kamu setup.
       final res = await supa.auth.signUp(
         email: _emailC.text.trim(),
         password: _passC.text,
-        // metadata opsional, bisa dipakai trigger untuk isi profiles
         data: {'full_name': _nameC.text.trim()},
       );
 
-      // Tergantung setting email confirmation. Di sini langsung arahkan ke Login.
       if (!mounted) return;
 
-      // (NEW) gunakan ikon sukses untuk banner sukses
       _banner.show(
         context,
         res.user == null
@@ -421,14 +428,12 @@ class _RegisterPageState extends State<RegisterPage>
     final size = media.size;
     final isShort = size.height < 700;
 
-    // Tinggi hero responsif (atur di RegisterDimens.heroRatio*)
     final heroH =
         size.height *
         (isShort
             ? RegisterDimens.heroRatioShort
             : RegisterDimens.heroRatioTall);
 
-    // Terapkan strategi "narik konten ke atas" jika gapAfterHero negatif
     final double safeTopPad = RegisterDimens.gapAfterHero > 0
         ? RegisterDimens.gapAfterHero
         : 0;
@@ -469,7 +474,6 @@ class _RegisterPageState extends State<RegisterPage>
 
                       // ========================== KONTEN ==========================
                       Padding(
-                        // Semua jarak horizontal/vertical diambil dari RegisterDimens
                         padding: EdgeInsets.fromLTRB(
                           RegisterDimens.sidePadding,
                           safeTopPad + RegisterDimens.brandTopGap,
@@ -480,7 +484,7 @@ class _RegisterPageState extends State<RegisterPage>
                           offset: Offset(
                             0,
                             pullUpY,
-                          ), // narik ke atas jika negatif
+                          ),
                           child: Center(
                             child: ConstrainedBox(
                               constraints: const BoxConstraints(
@@ -564,6 +568,18 @@ class _RegisterPageState extends State<RegisterPage>
                                     textInputAction: TextInputAction.next,
                                     prefix: const Icon(Icons.mail_outline),
                                   ),
+                                  // (BARU) Pesan error email
+                                  if (_emailErrorText != null) ...[
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      _emailErrorText!,
+                                      style: TextStyle(
+                                        color: Colors.red.shade700,
+                                        fontSize: 12,
+                                        height: 1.3,
+                                      ),
+                                    ),
+                                  ],
                                   const SizedBox(
                                     height: RegisterDimens.gapBetweenFields,
                                   ),
@@ -587,8 +603,6 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ),
                                   ),
-
-                                  // (NEW) Pesan error di bawah field password (hanya jika tidak memenuhi syarat)
                                   if (_passErrorText != null) ...[
                                     const SizedBox(height: 6),
                                     Text(
@@ -600,7 +614,6 @@ class _RegisterPageState extends State<RegisterPage>
                                       ),
                                     ),
                                   ],
-
                                   const SizedBox(
                                     height: RegisterDimens.gapBetweenFields,
                                   ),
@@ -708,9 +721,8 @@ class _RegisterPageState extends State<RegisterPage>
                                     width: double.infinity,
                                     height: RegisterDimens.btnHeight,
                                     child: ElevatedButton(
-                                      onPressed: _onSubmit, // validasi + banner
+                                      onPressed: _onSubmit,
                                       style: ElevatedButton.styleFrom(
-                                        // warna tombol Kirim khusus (#528123)
                                         backgroundColor: const Color(
                                           0xFF528123,
                                         ),
@@ -779,7 +791,7 @@ class _RegisterPageState extends State<RegisterPage>
 }
 
 /// ===================================================================
-///  KOMPONEN REUSABLE
+///   KOMPONEN REUSABLE
 /// ===================================================================
 class _FieldLabel extends StatelessWidget {
   final String text;
@@ -792,7 +804,7 @@ class _FieldLabel extends StatelessWidget {
       style: const TextStyle(
         color: Colors.black87,
         fontWeight: FontWeight.w700,
-        fontFamily: 'assets/fonts/nunito/nunito-bold.ttf', // Nunito Bold
+        fontFamily: 'assets/fonts/nunito/nunito-bold.ttf',
       ),
     );
   }
@@ -820,7 +832,7 @@ class _AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: RegisterDimens.fieldHeight, // UBAH tinggi field dari sini
+      height: RegisterDimens.fieldHeight,
       child: TextField(
         controller: controller,
         obscureText: obscure,
@@ -832,7 +844,7 @@ class _AppTextField extends StatelessWidget {
           hintText: hint,
           hintStyle: const TextStyle(color: AppColors.textMuted),
           contentPadding:
-              RegisterDimens.fieldContentPadding, // padding dalam field
+              RegisterDimens.fieldContentPadding,
           prefixIcon: prefix,
           suffixIcon: suffix,
           enabledBorder: OutlineInputBorder(
@@ -871,12 +883,11 @@ class _BrandHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        // Geser ikon relatif ke teks (lihat RegisterDimens.logoTopOffset)
         Transform.translate(
           offset: const Offset(0, RegisterDimens.logoTopOffset),
           child: Image.asset(
             assetPath,
-            height: iconSize, // UBAH ukuran logo dari RegisterDimens.brandIcon
+            height: iconSize,
             errorBuilder: (_, _, _) => Container(
               width: iconSize,
               height: iconSize,
