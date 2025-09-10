@@ -12,6 +12,7 @@ class MissionCard extends StatelessWidget {
   final Color iconBorderColor;
   final Color pointsBorderColor;
   final Color pointsTextColor;
+  final Color titleColor;
 
   const MissionCard({
     super.key,
@@ -25,6 +26,7 @@ class MissionCard extends StatelessWidget {
     required this.iconBorderColor,
     required this.pointsBorderColor,
     required this.pointsTextColor,
+    required this.titleColor,
   });
 
   @override
@@ -42,10 +44,7 @@ class MissionCard extends StatelessWidget {
             decoration: BoxDecoration(
               color: iconBgColor,
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(
-                color: iconBorderColor,
-                width: 2,
-              ),
+              border: Border.all(color: iconBorderColor, width: 2),
             ),
             child: Icon(iconData, color: iconAndTextColor, size: 28),
           ),
@@ -55,24 +54,24 @@ class MissionCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                    title,
-                    style: TextStyle(
-                      color: iconAndTextColor,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                      fontFamily: 'Nunito',
-                    )
+                  title,
+                  style: TextStyle(
+                    color: titleColor,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 15,
+                    fontFamily: 'Nunito',
+                  ),
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: pointsBorderColor,
-                      width: 1.5,
-                    ),
+                    border: Border.all(color: pointsBorderColor, width: 1.5),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
@@ -84,13 +83,13 @@ class MissionCard extends StatelessWidget {
                       ),
                       const SizedBox(width: 4),
                       Text(
-                          points,
-                          style: TextStyle(
-                            color: pointsTextColor,
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            fontFamily: 'Nunito',
-                          )
+                        points,
+                        style: TextStyle(
+                          color: pointsTextColor,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          fontFamily: 'Nunito',
+                        ),
                       ),
                     ],
                   ),
@@ -107,15 +106,16 @@ class MissionCard extends StatelessWidget {
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
-              side: BorderSide(
-                color: iconBorderColor,
-                width: 2,
-              ),
+              side: BorderSide(color: iconBorderColor, width: 2),
               elevation: 3,
             ),
             child: const Text(
               'Mulai',
-              style: TextStyle(fontFamily: 'Nunito'),
+              style: TextStyle(
+                fontFamily: 'Nunito',
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
