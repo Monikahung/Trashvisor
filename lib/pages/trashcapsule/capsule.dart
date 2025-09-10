@@ -327,6 +327,7 @@ class TrashCapsulePage extends StatelessWidget {
         : 'Tentukan tindakan penanganan sampah yang akan kamu lakukan terhadap "$waste".';
 
     // 🔁 Pastikan reset juga berjalan saat user tekan back sistem
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
         CapsuleGlobal.reset(); // 🧹 kosongkan search + cache saat keluar halaman

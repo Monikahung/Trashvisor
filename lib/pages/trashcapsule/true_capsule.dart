@@ -147,6 +147,7 @@ class _TrueTrashCapsuleState extends State<TrueTrashCapsule> {
     final items = _itemsForUI();
 
     // 🔁 Tangkap back sistem
+    // ignore: deprecated_member_use
     return WillPopScope(
       onWillPop: () async {
         CapsuleGlobal.reset(); // 🧹 kosongkan search + cache saat keluar halaman
