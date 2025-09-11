@@ -337,12 +337,26 @@ class _HomePageState extends State<HomePage> {
                 title: 'Trash Reward',
                 subtitle: 'Kumpulkan poin dan tukar dengan lencana dan uang',
                 onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const EcoRewardPage(),
-                    ),
-                  );
+                  // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
+                  if (_availableCameras != null &&
+                      _availableCameras!.isNotEmpty) {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        // Meneruskan _availableCameras ke ScanCamera.
+                        builder: (context) =>
+                            EcoRewardPage(cameras: _availableCameras!),
+                      ),
+                    );
+                  } else {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text(
+                          'Kamera tidak tersedia. Mohon periksa izin atau perangkat.',
+                        ),
+                      ),
+                    );
+                  }
                 },
                 gradient: const LinearGradient(
                   colors: [
@@ -587,7 +601,27 @@ class _HomePageState extends State<HomePage> {
               Icons.card_giftcard_outlined,
               color: AppColors.darkOliveGreen,
             ),
-            onPressed: () {},
+            onPressed: () {
+              // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
+              if (_availableCameras != null && _availableCameras!.isNotEmpty) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    // Meneruskan _availableCameras ke ScanCamera.
+                    builder: (context) =>
+                      EcoRewardPage(cameras: _availableCameras!),
+                  ),
+                );
+              } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text(
+                        'Kamera tidak tersedia. Mohon periksa izin atau perangkat.',
+                      ),
+                    ),
+                  );
+                }
+            },
           ),
         ],
       ),

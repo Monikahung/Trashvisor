@@ -5,9 +5,12 @@ import 'package:trashvisor/core/colors.dart';
 import 'widgets/mission_card.dart';
 import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
+import 'package:camera/camera.dart';
+import 'scan_video.dart';
 
 class EcoRewardPage extends StatefulWidget {
-  const EcoRewardPage({super.key});
+  final List<CameraDescription> cameras; // Tambahkan parameter cameras
+  const EcoRewardPage({super.key, required this.cameras});
 
   @override
   State<EcoRewardPage> createState() => _EcoRewardPageState();
@@ -287,7 +290,17 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () { /* Navigasi ke halaman riwayat */ },
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => ScanVideo(
+                              cameras: widget.cameras,
+                              missionType: 'plastic_bottle',
+                            ),
+                          ),
+                        );
+                      },
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
