@@ -7,6 +7,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'globals.dart';
 
 /// ========================================
 /// KONSTANTA DESAIN DAN UKURAN
@@ -66,6 +67,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Trashvisor App',
       debugShowCheckedModeBanner: false,
+      scaffoldMessengerKey: rootScaffoldMessengerKey,
       theme: ThemeData(
         // Catatan: ubah seedColor atau gunakan ThemeData.light/dark sesuai kebutuhan.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
