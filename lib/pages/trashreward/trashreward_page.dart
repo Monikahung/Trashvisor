@@ -16,41 +16,147 @@ class EcoRewardPage extends StatefulWidget {
   State<EcoRewardPage> createState() => _EcoRewardPageState();
 }
 
-class _EcoRewardPageState extends State<EcoRewardPage> {
-  // Deklarasikan variabel _formattedDate di sini
-  String _formattedDate = ''; 
-  
-  final List<Map<String, dynamic>> _levelThresholds = [
+class _EcoRewardPageState extends State<EcoRewardPage>
+    with SingleTickerProviderStateMixin {
+  String _formattedDate = '';
+
+  final List<Map<String, dynamic>> _levelThresholds = const [
     {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
     {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
     {'name': 'Gold', 'min_score': 3000, 'max_score': 6000},
   ];
 
-  // (REVISI) Hapus _selectedLevelIndex
-  // int _selectedLevelIndex = 0; // Tidak lagi dibutuhkan
+  // dipakai agar UI bisa di-refresh setelah poin berubah
+  late Future<Map<String, dynamic>> _profileData;
+  late Future<List<_DayState>> _dailyRow;
 
-  // (REVISI) Buat variabel untuk menyimpan data profil dan level
-  late final Future<Map<String, dynamic>> _profileData;
+  // cache status misi “hari ini” untuk mengganti tombol Mulai→Selesai
+  final Set<String> _completedMissionKeys = {};
+
+  // ------------------------ Top-toast (success) ------------------------
+  late final AnimationController _toastCtl;
+  OverlayEntry? _toastEntry;
+  Timer? _toastTimer;
+  String _toastMsg = '';
 
   @override
   void initState() {
     super.initState();
-    // (REVISI) Panggil fungsi _loadProfileAndLevelInfo() di initState
-    // untuk mengambil data saat halaman dimuat
     _profileData = _loadProfileAndLevelInfo();
-
+    _dailyRow = _loadDailyRowData();
     _initializeDate();
+
+    // animator toast
+    _toastCtl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 220),
+      reverseDuration: const Duration(milliseconds: 180),
+    )..addStatusListener((s) {
+        if (s == AnimationStatus.dismissed) {
+          _toastEntry?.remove();
+          _toastEntry = null;
+        }
+      });
+
+    // Prefetch misi hari ini supaya tombol langsung “Selesai” kalau sudah done.
+    _prefetchCompletedToday();
   }
 
-  Future<void> _initializeDate() async {
-    // Tunggu hingga data lokal untuk Indonesia dimuat
-    await initializeDateFormatting('id_ID', null);
-    
-    // Perbarui state untuk menampilkan tanggal yang diformat
-    setState(() {
-      _formattedDate = DateFormat('EEEE, dd - MM - yyyy', 'id_ID').format(DateTime.now());
+  @override
+  void dispose() {
+    _toastTimer?.cancel();
+    _toastCtl.dispose();
+    _toastEntry?.remove();
+    _toastEntry = null;
+    super.dispose();
+  }
+
+  void _showTopToast(
+    String message, {
+    Color bg = AppColors.fernGreen,
+    Color fg = Colors.white,
+  }) {
+    _toastTimer?.cancel();
+    _toastMsg = message;
+
+    final media = MediaQuery.of(context);
+    final topPad = media.padding.top;
+    const double side = 12;
+
+    if (_toastEntry == null) {
+      _toastEntry = OverlayEntry(
+        builder: (_) => Positioned(
+          top: topPad + 8,
+          left: side,
+          right: side,
+          child: SlideTransition(
+            position: Tween<Offset>(
+              begin: const Offset(0, -0.2),
+              end: Offset.zero,
+            ).animate(
+              CurvedAnimation(
+                parent: _toastCtl,
+                curve: Curves.easeOutCubic,
+                reverseCurve: Curves.easeInCubic,
+              ),
+            ),
+            child: FadeTransition(
+              opacity: _toastCtl,
+              child: Material(
+                color: bg,
+                elevation: 8,
+                borderRadius: BorderRadius.circular(12),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.check_circle_outline,
+                          color: Colors.white, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _toastMsg,
+                          style: TextStyle(
+                            color: fg,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+      Overlay.of(context).insert(_toastEntry!);
+    } else {
+      _toastEntry!.markNeedsBuild();
+    }
+
+    _toastCtl.forward(from: 0);
+
+    // 🔴 PENTING: durasi toast diperpanjang supaya jelas terlihat
+    _toastTimer = Timer(const Duration(milliseconds: 2500), () {
+      _toastCtl.reverse();
     });
   }
+  // --------------------------------------------------------------------
+
+  @override
+  Widget build(BuildContext context) => _buildRoot(context);
+
+  Future<void> _initializeDate() async {
+    await initializeDateFormatting('id_ID', null);
+    setState(() {
+      _formattedDate =
+          DateFormat('EEEE, dd - MM - yyyy', 'id_ID').format(DateTime.now());
+    });
+  }
+
+  // ===================== PROFILE + LEVEL =====================
 
   Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
     final client = Supabase.instance.client;
@@ -69,19 +175,21 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     try {
       final row = await client
           .from('profiles')
-          .select('full_name, score') // Cukup ambil full_name dan score
+          .select('full_name, score')
           .eq('id', user.id)
           .maybeSingle();
 
-      if (row == null) {
-        throw Exception('User profile not found.');
-      }
+      if (row == null) throw Exception('User profile not found.');
 
-      final fullName = (row['full_name'] as String?)?.trim() ?? user.email?.split('@').first ?? 'Pengguna';
-      final score = row['score'] as int? ?? 0;
+      final fullNameFromRow = (row['full_name'] as String?)?.trim();
+      final fullName = (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
+          ? fullNameFromRow
+          : (user.email?.split('@').first ?? 'Pengguna');
+
+      final score = (row['score'] as num?)?.toInt() ?? 0;
 
       final currentLevel = _levelThresholds.firstWhere(
-        (level) => score >= (level['min_score'] as int) && score < (level['max_score'] as int),
+        (l) => score >= (l['min_score'] as int) && score < (l['max_score'] as int),
         orElse: () => _levelThresholds.last,
       );
 
@@ -89,22 +197,19 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       double progressValue;
 
       if (currentLevel['name'] == 'Gold') {
-        // Logika khusus untuk level Gold
-        final goldMinScore = currentLevel['min_score'] as int;
-        final goldMaxScore = currentLevel['max_score'] as int;
-        final range = goldMaxScore - goldMinScore;
-        progressValue = range > 0 ? (score - goldMinScore) / range : 0.0;
-        progressText = '${goldMaxScore - score} poin menuju batas akhir';
+        final minS = currentLevel['min_score'] as int;
+        final maxS = currentLevel['max_score'] as int;
+        final range = maxS - minS;
+        progressValue = range > 0 ? (score - minS) / range : 0.0;
+        progressText = '${maxS - score} poin menuju batas akhir';
       } else {
-        // Logika untuk level Bronze dan Silver
-        final nextLevelIndex = _levelThresholds.indexOf(currentLevel) + 1;
-        final nextLevel = _levelThresholds[nextLevelIndex];
-        final nextLevelMinScore = nextLevel['min_score'] as int;
-        final currentLevelMinScore = currentLevel['min_score'] as int;
-        
-        final range = nextLevelMinScore - currentLevelMinScore;
-        progressValue = range > 0 ? (score - currentLevelMinScore) / range : 1.0;
-        progressText = '${nextLevelMinScore - score} poin menuju level ${nextLevel['name']}';
+        final nextIndex = _levelThresholds.indexOf(currentLevel) + 1;
+        final next = _levelThresholds[nextIndex];
+        final nextMin = next['min_score'] as int;
+        final curMin = currentLevel['min_score'] as int;
+        final range = nextMin - curMin;
+        progressValue = range > 0 ? (score - curMin) / range : 1.0;
+        progressText = '${nextMin - score} poin menuju level ${next['name']}';
       }
 
       return {
@@ -126,22 +231,361 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
+  // ===================== TUGAS HARIAN (DATA) =====================
+
+  Future<List<_DayState>> _loadDailyRowData() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    final today = _dateOnly(DateTime.now());
+
+    if (user == null) {
+      // semua abu-abu, hari ini diborder hijau
+      return _weekSkeleton(today, today);
+    }
+
+    // ambil tanggal dibuatnya akun; fallback: today
+    DateTime createdAt = today;
+    try {
+      final prof = await client
+          .from('profiles')
+          .select('created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (prof != null && prof['created_at'] != null) {
+        createdAt = _dateOnly(DateTime.parse(prof['created_at'].toString()));
+      }
+    } catch (_) {}
+
+    // Window minggu ini: Senin..Minggu
+    final monday = _mondayOf(today);
+    final sunday = monday.add(const Duration(days: 6));
+
+    // Ambil mission_history minggu ini
+    final Set<DateTime> successDays = {};
+    final Set<DateTime> activityDays = {};
+    try {
+      final rows = await client
+          .from('mission_history')
+          .select('mission_date,status')
+          .eq('user_id', user.id)
+          .gte('mission_date', _yyyyMmDd(monday))
+          .lte('mission_date', _yyyyMmDd(sunday));
+
+      for (final r in rows as List) {
+        final dStr = r['mission_date'];
+        if (dStr == null) continue;
+        final d = _dateOnly(DateTime.parse(dStr.toString()));
+        activityDays.add(d); // ada baris apapun -> ada aktivitas
+
+        final status = (r['status'] ?? '').toString().toLowerCase();
+        // ✅ status kita "completed:<key>" → tetap terdeteksi
+        final ok = ['done', 'completed', 'success', 'selesai', 'finish']
+            .any((k) => status.contains(k));
+        if (ok) successDays.add(d);
+      }
+    } catch (e) {
+      debugPrint('err load mission_history: $e');
+    }
+
+    // Rakit 7 hari
+    final labels = const [
+      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+    ];
+    final List<_DayState> result = [];
+    for (int i = 0; i < 7; i++) {
+      final d = monday.add(Duration(days: i));
+      final beforeCreated = d.isBefore(createdAt);
+      final inFuture = d.isAfter(today);
+      final eligible = !(beforeCreated || inFuture);
+      final isCompleted = eligible && successDays.contains(d);
+      final hasActivity = eligible && activityDays.contains(d);
+      final isCurrent = d == today;
+      result.add(_DayState(
+        label: labels[i],
+        date: d,
+        eligible: eligible,
+        completed: isCompleted,
+        hasActivity: hasActivity,
+        isCurrent: isCurrent,
+      ));
+    }
+    return result;
+  }
+
+  // skeleton satu minggu saat tidak login
+  List<_DayState> _weekSkeleton(DateTime createdAt, DateTime today) {
+    final monday = _mondayOf(today);
+    final labels = const [
+      'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'
+    ];
+
+    final List<_DayState> out = [];
+    for (int i = 0; i < 7; i++) {
+      final d = DateTime(monday.year, monday.month, monday.day + i);
+      final beforeCreated = d.isBefore(createdAt);
+      final inFuture = d.isAfter(today);
+      final eligible = !(beforeCreated || inFuture);
+      out.add(_DayState(
+        label: labels[i],
+        date: d,
+        eligible: eligible,
+        completed: false,
+        hasActivity: false,
+        isCurrent: d.year == today.year && d.month == today.month && d.day == today.day,
+      ));
+    }
+    return out;
+  }
+
+  // ===================== HELPERS =====================
+
+  DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  DateTime _mondayOf(DateTime d) {
+    final wd = d.weekday; // Mon=1 ... Sun=7
+    return _dateOnly(d.subtract(Duration(days: wd - 1)));
+  }
+
+  String _yyyyMmDd(DateTime d) =>
+      '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  // Poin per level (brief)
+  int _pointsForLevel(String levelName) {
+    switch (levelName) {
+      case 'Silver': return 50;
+      case 'Gold':   return 40;
+      case 'Bronze':
+      default:       return 60;
+    }
+  }
+
+  // 5 misi unified
+  List<_MissionDef> _missions(String levelName) {
+    final p = _pointsForLevel(levelName);
+    return [
+      _MissionDef(
+        key: 'checkin',
+        title: 'Check-in harian.',
+        icon: Icons.calendar_today_outlined,
+        points: p,
+      ),
+      _MissionDef(
+        key: 'record_paper',
+        title: 'Rekam pembuangan sampah kertas pada tempatnya.',
+        icon: Icons.camera_roll_outlined,
+        points: p,
+      ),
+      _MissionDef(
+        key: 'record_leaves',
+        title: 'Rekam pembuangan sampah daun pada tempatnya.',
+        icon: Icons.camera_roll_outlined,
+        points: p,
+      ),
+      _MissionDef(
+        key: 'record_plastic_bottle',
+        title: 'Rekam pembuangan sampah botol plastik pada tempatnya.',
+        icon: Icons.camera_roll_outlined,
+        points: p,
+      ),
+      _MissionDef(
+        key: 'record_can',
+        title: 'Rekam pembuangan sampah kaleng minuman pada tempatnya.',
+        icon: Icons.camera_roll_outlined,
+        points: p,
+      ),
+    ];
+  }
+
+  _LevelTheme _themeForLevel(String levelName) {
+    switch (levelName) {
+      case 'Silver':
+        return _LevelTheme(
+          cardColor: AppColors.oliveGreen,
+          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          buttonBgColor: AppColors.rewardCardBg,
+          iconBgColor: AppColors.rewardCardBg,
+          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.whiteSmoke,
+          titleColor: AppColors.whiteSmoke,
+        );
+      case 'Gold':
+        return _LevelTheme(
+          cardColor: AppColors.mossGreen,
+          iconAndTextColor: AppColors.rewardCardIkonBorder,
+          buttonBgColor: AppColors.lightSageGreen,
+          iconBgColor: AppColors.lightSageGreen,
+          iconBorderColor: AppColors.rewardCardIkonBorder,
+          pointsBorderColor: AppColors.lightSageGreen,
+          pointsTextColor: AppColors.whiteSmoke,
+          titleColor: AppColors.whiteSmoke,
+        );
+      case 'Bronze':
+      default:
+        return _LevelTheme(
+          cardColor: AppColors.lightSageGreen,
+          iconAndTextColor: AppColors.darkMossGreen,
+          buttonBgColor: AppColors.black,
+          iconBgColor: AppColors.mossGreen,
+          iconBorderColor: AppColors.fernGreen,
+          pointsBorderColor: AppColors.fernGreen,
+          pointsTextColor: AppColors.black,
+          titleColor: AppColors.black,
+        );
+    }
+  }
+
+  // ✅ Prefetch: misi hari ini yang sudah selesai (supaya tombol langsung Selesai)
+  Future<void> _prefetchCompletedToday() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+
+    final today = _yyyyMmDd(_dateOnly(DateTime.now()));
+    try {
+      final rows = await client
+          .from('mission_history')
+          .select('status')
+          .eq('user_id', user.id)
+          .eq('mission_date', today);
+
+      final keys = <String>{};
+      for (final r in rows as List) {
+        final s = (r['status'] ?? '').toString();
+        // format "completed:<key>"
+        if (s.startsWith('completed:')) {
+          keys.add(s.substring('completed:'.length));
+        }
+      }
+
+      if (keys.isNotEmpty) {
+        setState(() {
+          _completedMissionKeys
+            ..clear()
+            ..addAll(keys);
+        });
+      }
+    } catch (e) {
+      debugPrint('prefetchCompletedToday err: $e');
+    }
+  }
+
+  // ✅ Cek apakah misi <key> sudah completed hari ini (idempotent)
+  Future<bool> _alreadyCompletedToday(String missionKey) async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return false;
+    final today = _dateOnly(DateTime.now());
+
+    try {
+      final row = await client
+          .from('mission_history')
+          .select('id')
+          .eq('user_id', user.id)
+          .eq('mission_date', _yyyyMmDd(today))
+          .eq('status', 'completed:$missionKey')
+          .maybeSingle();
+      return row != null;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // 🔴 PENTING: Selesaikan misi (mode uji → langsung selesai & tambah poin)
+  Future<void> _completeMission(_MissionDef m, int points) async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) {
+      _showTopToast('Silakan login terlebih dahulu.', bg: Colors.red);
+      return;
+    }
+
+    final today = _dateOnly(DateTime.now());
+    final dateStr = _yyyyMmDd(today);
+    final statusStr = 'completed:${m.key}';
+
+    try {
+      // Idempotent: kalau sudah ada jangan dobel
+      if (await _alreadyCompletedToday(m.key)) {
+        setState(() => _completedMissionKeys.add(m.key));
+        _showTopToast('Tugas sudah selesai hari ini.');
+        return;
+      }
+
+      // INSERT mission_history
+      await client.from('mission_history').insert({
+        // 🔴 PENTING (RLS): user_id harus = auth.uid()
+        'user_id': user.id,
+        // Boleh dihilangkan jika kolom punya default current_date
+        'mission_date': dateStr,
+        'status': statusStr,
+        // Boleh dihilangkan jika kolom punya default now()
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      });
+
+      // UPDATE score (bigint → num)
+      final prof = await client
+          .from('profiles')
+          .select('score')
+          .eq('id', user.id)
+          .maybeSingle();
+      final cur = (prof?['score'] as num?)?.toInt() ?? 0;
+
+      await client
+          .from('profiles')
+          .update({'score': cur + points})
+          .eq('id', user.id);
+
+      // Refresh UI
+      setState(() {
+        _completedMissionKeys.add(m.key);
+        _profileData = _loadProfileAndLevelInfo();
+        _dailyRow = _loadDailyRowData();
+      });
+
+      _showTopToast('Tugas selesai: +$points poin'); // toast di atas
+    } catch (e) {
+      // ℹ️ Jika pakai unique index (user_id, mission_date, status),
+      // duplikat akan lempar error 23505 → anggap sudah selesai.
+      final msg = e.toString();
+      if (msg.contains('duplicate key value') || msg.contains('23505')) {
+        setState(() => _completedMissionKeys.add(m.key));
+        _showTopToast('Tugas sudah tercatat.');
+        return;
+      }
+
+      debugPrint('completeMission err: $e');
+
+      // Check-in wajib berhasil (mode uji)
+      if (m.key == 'checkin') {
+        setState(() {
+          _completedMissionKeys.add(m.key);
+          _profileData = _loadProfileAndLevelInfo();
+          _dailyRow = _loadDailyRowData();
+        });
+        _showTopToast('Check-in dicatat (mode uji).');
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Gagal menyelesaikan tugas. Coba lagi.')),
+        );
+      }
+    }
+  }
+
+  // ===================== UI ROOT =====================
+
+  Widget _buildRoot(BuildContext context) {
     return Scaffold(
       body: SingleChildScrollView(
         child: Column(
           children: [
             _buildHeaderSection(),
-            // (REVISI) Tampilkan bagian misi sesuai data dari FutureBuilder
             FutureBuilder<Map<String, dynamic>>(
               future: _profileData,
               builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return _buildMissionsSection(levelName: 'Bronze'); // Default saat loading
-                }
-                
-                final levelName = snapshot.data!['level_name'] as String;
+                final levelName =
+                    snapshot.data?['level_name'] as String? ?? 'Bronze';
                 return _buildMissionsSection(levelName: levelName);
               },
             ),
@@ -150,6 +594,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       ),
     );
   }
+
+  // ===================== UI: Header & Profile Card =====================
 
   Widget _buildHeaderSection() {
     return Stack(
@@ -162,9 +608,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           errorBuilder: (context, error, stackTrace) {
             return const SizedBox(
               height: 250,
-              child: Center(
-                child: Text('Gagal memuat gambar header.'),
-              ),
+              child: Center(child: Text('Gagal memuat gambar header.')),
             );
           },
         ),
@@ -194,10 +638,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           decoration: BoxDecoration(
             color: AppColors.rewardWhiteTransparent.withAlpha((255 * 0.5).round()),
             shape: BoxShape.circle,
-            border: Border.all(
-              color: AppColors.rewardCardBorder,
-              width: 1
-            )
+            border: Border.all(color: AppColors.rewardCardBorder, width: 1),
           ),
           child: IconButton(
             icon: const Icon(Icons.arrow_back, color: AppColors.rewardCardBorder),
@@ -207,13 +648,14 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
         const Text(
           "Eco Reward",
           style: TextStyle(
-              color: AppColors.white,
-              fontSize: 20,
-              fontWeight: FontWeight.bold),
+            color: AppColors.white,
+            fontSize: 20,
+            fontWeight: FontWeight.bold,
+          ),
         ),
-        Opacity(
+        const Opacity(
           opacity: 0,
-          child: IconButton(onPressed: () {}, icon: const Icon(Icons.arrow_back)),
+          child: IconButton(onPressed: null, icon: Icon(Icons.arrow_back)),
         ),
       ],
     );
@@ -223,10 +665,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     return FutureBuilder<Map<String, dynamic>>(
       future: _profileData,
       builder: (context, snapshot) {
-        if (!snapshot.hasData) {
-          return _buildProfileCardPlaceholder();
-        }
-        
+        if (!snapshot.hasData) return _buildProfileCardPlaceholder();
+
         final data = snapshot.data!;
         final name = data['name'] as String;
         final score = data['score'] as int;
@@ -234,20 +674,12 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
         final progressText = data['progress_text'] as String;
         final progressValue = data['progress_value'] as double;
 
-        // Tentukan warna ikon berdasarkan level
         Color iconBgColor;
         switch (levelName) {
+          case 'Silver': iconBgColor = Colors.grey.shade500; break;
+          case 'Gold':   iconBgColor = Colors.amber.shade700; break;
           case 'Bronze':
-            iconBgColor = Colors.brown.shade400;
-            break;
-          case 'Silver':
-            iconBgColor = Colors.grey.shade500;
-            break;
-          case 'Gold':
-            iconBgColor = Colors.amber.shade700;
-            break;
-          default:
-            iconBgColor = Colors.brown.shade400;
+          default:       iconBgColor = Colors.brown.shade400;
         }
 
         return Padding(
@@ -257,10 +689,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             decoration: BoxDecoration(
               color: AppColors.rewardCardBg.withAlpha((255 * 0.85).round()),
               borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: AppColors.rewardCardBorder,
-                width: 2,
-              ),
+              border: Border.all(color: AppColors.rewardCardBorder, width: 2),
               boxShadow: [
                 BoxShadow(
                   color: AppColors.black.withAlpha((255 * 0.1).round()),
@@ -276,7 +705,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                   children: [
                     CircleAvatar(
                       backgroundColor: iconBgColor,
-                      child: Icon(Icons.star, color: Colors.white),
+                      child: const Icon(Icons.star, color: Colors.white),
                     ),
                     const SizedBox(width: 8),
                     Text(
@@ -290,17 +719,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (context) => ScanVideo(
-                              cameras: widget.cameras,
-                              missionType: 'plastic_bottle',
-                            ),
-                          ),
-                        );
-                      },
+                      onPressed: () {},
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -312,11 +731,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                             ),
                           ),
                           SizedBox(width: 4),
-                          Icon(
-                            Icons.arrow_forward_ios,
-                            size: 14,
-                            color: AppColors.darkMossGreen,
-                          ),
+                          Icon(Icons.arrow_forward_ios,
+                              size: 14, color: AppColors.darkMossGreen),
                         ],
                       ),
                     )
@@ -324,27 +740,28 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                    name,
-                    style: const TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.bold,
-                      color: AppColors.deepForestGreen,
-                      fontFamily: 'Roboto',
-                    )
+                  name,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: AppColors.deepForestGreen,
+                    fontFamily: 'Roboto',
+                  ),
                 ),
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.monetization_on, color: AppColors.rewardGold, size: 24),
+                    const Icon(Icons.monetization_on,
+                        color: AppColors.rewardGold, size: 24),
                     const SizedBox(width: 8),
                     Text(
-                        score.toString(),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppColors.deepForestGreen,
-                          fontFamily: 'Roboto',
-                        )
+                      score.toString(),
+                      style: const TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: AppColors.deepForestGreen,
+                        fontFamily: 'Roboto',
+                      ),
                     ),
                   ],
                 ),
@@ -358,12 +775,12 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                    progressText,
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.darkMossGreen,
-                      fontFamily: 'Roboto',
-                    )
+                  progressText,
+                  style: const TextStyle(
+                    fontSize: 12,
+                    color: AppColors.darkMossGreen,
+                    fontFamily: 'Roboto',
+                  ),
                 ),
               ],
             ),
@@ -377,7 +794,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     return const Padding(
       padding: EdgeInsets.symmetric(horizontal: 20.0),
       child: SizedBox(
-        height: 200, 
+        height: 200,
         child: Center(
           child: CircularProgressIndicator(color: AppColors.deepForestGreen),
         ),
@@ -385,21 +802,25 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  // (REVISI) Tambahkan parameter levelName
+  // ===================== UI: Missions Section =====================
+
   Widget _buildMissionsSection({required String levelName}) {
     Color missionsBgColor;
     int selectedLevelIndex;
 
-    if (levelName == 'Bronze') {
-      missionsBgColor = AppColors.mossGreen;
-      selectedLevelIndex = 0;
-    } else if (levelName == 'Silver') {
+    if (levelName == 'Silver') {
       missionsBgColor = AppColors.rewardCardBg;
       selectedLevelIndex = 1;
-    } else {
+    } else if (levelName == 'Gold') {
       missionsBgColor = AppColors.lightSageGreen;
       selectedLevelIndex = 2;
+    } else {
+      missionsBgColor = AppColors.mossGreen;
+      selectedLevelIndex = 0;
     }
+
+    final theme = _themeForLevel(levelName);
+    final missions = _missions(levelName);
 
     return Container(
       width: double.infinity,
@@ -424,11 +845,31 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
               ),
               child: Column(
                 children: [
-                  _buildLevelTabs(selectedLevelIndex), // (REVISI) Kirim index level ke tab
+                  _buildLevelTabs(selectedLevelIndex),
                   const SizedBox(height: 20),
-                  if (selectedLevelIndex == 0) _buildBronzeMissions(),
-                  if (selectedLevelIndex == 1) _buildSilverMissions(),
-                  if (selectedLevelIndex == 2) _buildGoldMissions(),
+                  // 5 misi unified
+                  ...missions.map((m) {
+                    final isDone = _completedMissionKeys.contains(m.key);
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: MissionCard(
+                        iconData: m.icon,
+                        title: m.title,
+                        points: '+${m.points} poin',
+                        cardColor: theme.cardColor,
+                        iconAndTextColor: theme.iconAndTextColor,
+                        buttonBgColor: theme.buttonBgColor,
+                        iconBgColor: theme.iconBgColor,
+                        iconBorderColor: theme.iconBorderColor,
+                        pointsBorderColor: theme.pointsBorderColor,
+                        pointsTextColor: theme.pointsTextColor,
+                        titleColor: theme.titleColor,
+                        buttonText: isDone ? 'Selesai' : 'Mulai',
+                        isCompleted: isDone,
+                        onPressed: isDone ? null : () => _completeMission(m, m.points),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),
@@ -438,17 +879,9 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
     );
   }
 
-  Widget _buildDailyCheckInSection() {
-    final days = [
-      {'day': 'Senin', 'points': '+10', 'completed': true, 'isCurrent': false},
-      {'day': 'Selasa', 'points': '+20', 'completed': true, 'isCurrent': false},
-      {'day': 'Rabu', 'points': '+30', 'completed': true, 'isCurrent': false},
-      {'day': 'Kamis', 'points': '+40', 'completed': true, 'isCurrent': false},
-      {'day': 'Jumat', 'points': '+50', 'completed': false, 'isCurrent': true},
-      {'day': 'Sabtu', 'points': '+60', 'completed': false, 'isCurrent': false},
-      {'day': 'Minggu', 'points': '+70', 'completed': false, 'isCurrent': false},
-    ];
+  // ---------------- TUGAS HARIAN (UI) ----------------
 
+  Widget _buildDailyCheckInSection() {
     return Column(
       children: [
         Row(
@@ -480,7 +913,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
               ),
               child: Text(
                 _formattedDate,
-                style: TextStyle(
+                style: const TextStyle(
                   color: AppColors.rewardGreenPrimary,
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -491,30 +924,82 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           ],
         ),
         const SizedBox(height: 16),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
-          decoration: BoxDecoration(
-            color: AppColors.white,
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(color: AppColors.rewardGreenPrimary),
-          ),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: days.map((dayData) {
-              return _buildDayItem(
-                day: dayData['day'] as String,
-                isCompleted: dayData['completed'] as bool,
-                isCurrent: dayData['isCurrent'] as bool,
+        FutureBuilder<List<_DayState>>(
+          future: _dailyRow,
+          builder: (context, snap) {
+            final days = snap.data;
+            if (days == null) {
+              return Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+                decoration: BoxDecoration(
+                  color: AppColors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppColors.rewardGreenPrimary),
+                ),
+                child: const Center(
+                  child: SizedBox(
+                    height: 28,
+                    width: 28,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2.4,
+                      color: AppColors.rewardGreenPrimary,
+                    ),
+                  ),
+                ),
               );
-            }).toList(),
-          ),
+            }
+
+            return Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.rewardGreenPrimary),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: days
+                    .map((d) => _buildDayItem(
+                          day: d.label,
+                          eligible: d.eligible,
+                          isCompleted: d.completed,
+                          hasActivity: d.hasActivity,
+                          isCurrent: d.isCurrent,
+                        ))
+                    .toList(),
+              ),
+            );
+          },
         ),
       ],
     );
   }
 
-  Widget _buildDayItem({required String day, required bool isCompleted, required bool isCurrent}) {
-    bool hasCoin = isCompleted || isCurrent;
+  Widget _buildDayItem({
+    required String day,
+    required bool eligible,
+    required bool isCompleted,
+    required bool hasActivity,
+    required bool isCurrent,
+  }) {
+    // Mapping UI harian sesuai spesifikasi
+    final bool isProgress = eligible && isCurrent && !isCompleted;
+
+    Widget? inner;
+    if (!eligible) {
+      inner = null; // sebelum akun dibuat / setelah hari ini
+    } else if (isProgress) {
+      inner = Icon(Icons.attach_money,
+          color: AppColors.rewardGreenPrimary.withOpacity(0.35), size: 22);
+    } else if (isCompleted || hasActivity) {
+      inner = Icon(Icons.monetization_on, color: Colors.amber.shade700, size: 24);
+    } else {
+      inner = const Icon(Icons.cancel, color: Colors.red, size: 24);
+    }
+
+    final borderColor =
+        (isProgress || isCurrent) ? AppColors.rewardGreenPrimary : Colors.grey.shade400;
+    final borderWidth = (isProgress || isCurrent) ? 2.0 : 1.0;
 
     return Column(
       children: [
@@ -525,31 +1010,20 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
             color: Colors.grey.shade200,
             shape: BoxShape.circle,
             border: Border.all(
-              color: isCurrent ? AppColors.rewardGreenPrimary : Colors.grey.shade400,
-              width: isCurrent ? 2.0 : 1.0,
+              color: eligible ? borderColor : Colors.grey.shade300,
+              width: borderWidth,
             ),
           ),
-          child: hasCoin
-              ? Icon(
-            Icons.monetization_on,
-            color: isCurrent ? AppColors.white : Colors.amber.shade700,
-            size: 24,
-          )
-              : null,
+          child: inner,
         ),
         const SizedBox(height: 4),
-        Text(
-          day,
-          style: const TextStyle(
-            fontSize: 12,
-            fontFamily: 'Roboto',
-          ),
-        ),
+        Text(day, style: const TextStyle(fontSize: 12, fontFamily: 'Roboto')),
       ],
     );
   }
 
-  // (REVISI) Menerima parameter selectedLevelIndex
+  // ------------------ Level tabs & missions ------------------
+
   Widget _buildLevelTabs(int selectedLevelIndex) {
     final levelsData = [
       {'name': 'Bronze', 'color': AppColors.lightSageGreen, 'iconColor': Colors.brown.shade400},
@@ -571,13 +1045,7 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
           final level = levelsData[index];
           return Expanded(
             child: GestureDetector(
-              // onTap: () {
-              //   setState(() {
-              //     _selectedLevelIndex = index;
-              //   });
-              // },
-              // (REVISI) Menonaktifkan onTap agar tidak bisa diubah manual
-              onTap: null, 
+              onTap: null, // level mengikuti score (tidak manual)
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -593,8 +1061,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                       color: isSelected && level['name'] == 'Bronze'
                           ? AppColors.black
                           : isSelected
-                          ? AppColors.white
-                          : (level['iconColor'] as Color),
+                              ? AppColors.white
+                              : (level['iconColor'] as Color),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -604,8 +1072,8 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
                         color: isSelected && level['name'] == 'Bronze'
                             ? AppColors.black
                             : isSelected
-                            ? AppColors.white
-                            : AppColors.darkMossGreen,
+                                ? AppColors.white
+                                : AppColors.darkMossGreen,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -618,263 +1086,60 @@ class _EcoRewardPageState extends State<EcoRewardPage> {
       ),
     );
   }
+}
 
-  // Daftar Misi untuk Level Bronze
-  Widget _buildBronzeMissions() {
-    return Column(
-      children: [
-        MissionCard(
-          iconData: Icons.calendar_today_outlined,
-          title: 'Check-in harian selama 3 hari',
-          points: '+50 poin',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 1 kali',
-          points: '+70 poin px',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.chat_bubble_outline,
-          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 3 kali',
-          points: '+60 poin',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.location_on_outlined,
-          title: 'Cek Trash Location sebanyak 3 kali',
-          points: '+60 poin',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.timelapse_outlined,
-          title: 'Gunakan Trash Capsule sebanyak 1 kali',
-          points: '+60 poin',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.eco_outlined,
-          title: 'Foto sampah organik',
-          points: '+25 px',
-          cardColor: AppColors.lightSageGreen,
-          iconAndTextColor: AppColors.darkMossGreen,
-          buttonBgColor: AppColors.black,
-          iconBgColor: AppColors.mossGreen,
-          iconBorderColor: AppColors.fernGreen,
-          pointsBorderColor: AppColors.fernGreen,
-          pointsTextColor: AppColors.black,
-          titleColor: AppColors.black,
-        ),
-      ],
-    );
-  }
+// ===================== Model kecil untuk state hari =====================
 
-  Widget _buildSilverMissions() {
-    return Column(
-      children: [
-        MissionCard(
-          iconData: Icons.calendar_today_outlined,
-          title: 'Check-in harian',
-          points: '+50 poin',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 3 kali',
-          points: '+80 poin',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.chat_bubble_outline,
-          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 5 kali',
-          points: '+70 poin',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.location_on_outlined,
-          title: 'Cek Trash Location sebanyak 5 kali',
-          points: '+70 poin',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.timelapse_outlined,
-          title: 'Gunakan Trash Capsule sebanyak 2 kali',
-          points: '+70 point',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.eco_outlined,
-          title: 'Deteksi sampah organik dengan Trash Vision',
-          points: '+60 poin',
-          cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-      ],
-    );
-  }
+class _DayState {
+  final String label;
+  final DateTime date;
+  final bool eligible;    // false = sebelum akun dibuat ATAU setelah hari ini
+  final bool completed;   // true = ada mission_history status sukses
+  final bool hasActivity; // true = ada baris mission_history apapun
+  final bool isCurrent;   // true = hari ini
 
-  Widget _buildGoldMissions() {
-    return Column(
-      children: [
-        MissionCard(
-          iconData: Icons.calendar_today_outlined,
-          title: 'Check-in harian',
-          points: '+50 poin',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.camera_alt_outlined,
-          title: 'Gunakan Trash Vision sebanyak 5 kali',
-          points: '+80 poin',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.chat_bubble_outline,
-          title: 'Ajukan pertanyaan ke Trash Chatbot sebanyak 7 kali',
-          points: '+70 poin',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.location_on_outlined,
-          title: 'Cek Trash Location sebanyak 7 kali',
-          points: '+70 point',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.timelapse_outlined,
-          title: 'Gunakan Trash Capsule sebanyak kali',
-          points: '+70 poin',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-        const SizedBox(height: 12),
-        MissionCard(
-          iconData: Icons.camera_roll_outlined,
-          title: 'Rekam membuang sampah daun pada tempatnya',
-          points: '+60 poin',
-          cardColor: AppColors.mossGreen,
-          iconAndTextColor: AppColors.rewardCardIkonBorder,
-          iconBgColor: AppColors.lightSageGreen,
-          iconBorderColor: AppColors.rewardCardIkonBorder,
-          pointsBorderColor: AppColors.lightSageGreen,
-          pointsTextColor: AppColors.whiteSmoke,
-          titleColor: AppColors.whiteSmoke,
-        ),
-      ],
-    );
-  }
+  _DayState({
+    required this.label,
+    required this.date,
+    required this.eligible,
+    required this.completed,
+    required this.hasActivity,
+    required this.isCurrent,
+  });
+}
+
+// ===================== Model & Theme bantuan =====================
+
+class _MissionDef {
+  final String key;
+  final String title;
+  final IconData icon;
+  final int points;
+  _MissionDef({
+    required this.key,
+    required this.title,
+    required this.icon,
+    required this.points,
+  });
+}
+
+class _LevelTheme {
+  final Color cardColor;
+  final Color iconAndTextColor;
+  final Color buttonBgColor;
+  final Color iconBgColor;
+  final Color iconBorderColor;
+  final Color pointsBorderColor;
+  final Color pointsTextColor;
+  final Color titleColor;
+  _LevelTheme({
+    required this.cardColor,
+    required this.iconAndTextColor,
+    required this.buttonBgColor,
+    required this.iconBgColor,
+    required this.iconBorderColor,
+    required this.pointsBorderColor,
+    required this.pointsTextColor,
+    required this.titleColor,
+  });
 }

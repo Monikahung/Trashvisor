@@ -14,6 +14,11 @@ class MissionCard extends StatelessWidget {
   final Color pointsTextColor;
   final Color titleColor;
 
+  // interaksi tombol/status
+  final String? buttonText;     // default: 'Mulai'
+  final VoidCallback? onPressed;
+  final bool isCompleted;
+
   const MissionCard({
     super.key,
     required this.iconData,
@@ -27,10 +32,15 @@ class MissionCard extends StatelessWidget {
     required this.pointsBorderColor,
     required this.pointsTextColor,
     required this.titleColor,
+    this.buttonText,
+    this.onPressed,
+    this.isCompleted = false,
   });
 
   @override
   Widget build(BuildContext context) {
+    final bool enabled = onPressed != null && !isCompleted;
+
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -64,10 +74,7 @@ class MissionCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 4,
-                  ),
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(
                     color: Colors.transparent,
                     borderRadius: BorderRadius.circular(20),
@@ -76,11 +83,7 @@ class MissionCard extends StatelessWidget {
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(
-                        Icons.monetization_on,
-                        color: pointsTextColor,
-                        size: 14,
-                      ),
+                      Icon(Icons.monetization_on, color: pointsTextColor, size: 14),
                       const SizedBox(width: 4),
                       Text(
                         points,
@@ -99,19 +102,17 @@ class MissionCard extends StatelessWidget {
           ),
           const SizedBox(width: 12),
           ElevatedButton(
-            onPressed: () {},
+            onPressed: enabled ? onPressed : null,
             style: ElevatedButton.styleFrom(
-              backgroundColor: iconBgColor,
-              foregroundColor: iconAndTextColor,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
+              backgroundColor: enabled ? iconBgColor : Colors.grey.shade300,
+              foregroundColor: enabled ? iconAndTextColor : Colors.grey.shade600,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
               side: BorderSide(color: iconBorderColor, width: 2),
               elevation: 3,
             ),
-            child: const Text(
-              'Mulai',
-              style: TextStyle(
+            child: Text(
+              isCompleted ? 'Selesai' : (buttonText ?? 'Mulai'),
+              style: const TextStyle(
                 fontFamily: 'Nunito',
                 fontSize: 14,
                 fontWeight: FontWeight.w700,
