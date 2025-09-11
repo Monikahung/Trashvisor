@@ -1,12 +1,40 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
 import 'package:trashvisor/core/colors.dart';
-import 'trashreward_page.dart';
 import 'guide_video.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../globals.dart';
+
+// Fungsi untuk menampilkan snackbar kustom
+void _showCustomSnackbar(
+  String message,
+  Color color,
+  IconData icon,
+) {
+  rootScaffoldMessengerKey.currentState?.showSnackBar(
+    SnackBar(
+      content: Row(
+        children: [
+          Icon(icon, color: Colors.white),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              message,
+              style: const TextStyle(color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+      backgroundColor: color,
+      behavior: SnackBarBehavior.floating,
+      margin: const EdgeInsets.only(bottom: 15, left: 15, right: 15),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+    ),
+  );
+}
 
 // Fungsi upload video ke Hugging Face
 Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
@@ -31,15 +59,33 @@ Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
     );
 
     debugPrint("Response status: ${response.statusCode}");
-    if (response.statusCode == 200 && response.data != null) {
-      final result = response.data as Map<String, dynamic>;
-      debugPrint("Hasil dari Hugging Face: $result");
-      return result;
+
+    if (response.statusCode == 200) {
+      debugPrint("Data respons mentah: ${response.data.toString()}");
+      
+      try {
+        if (response.data is Map<String, dynamic>) {
+          debugPrint("Respons adalah Map.");
+          return response.data;
+        } else if (response.data is String) {
+          final decodedData = jsonDecode(response.data);
+          debugPrint("Respons di-decode dari String.");
+          if (decodedData is Map<String, dynamic>) {
+            return decodedData;
+          }
+        }
+      } catch (e) {
+        debugPrint("Gagal mengolah data respons: $e");
+      }
     } else {
       debugPrint("Upload gagal, status code: ${response.statusCode}");
     }
   } on DioException catch (e) {
     debugPrint("Error saat upload video (DioException): $e");
+    if (e.response != null) {
+      debugPrint("Error Response Data: ${e.response?.data}");
+      debugPrint("Error Response Status: ${e.response?.statusCode}");
+    }
   } catch (e) {
     debugPrint("Error tidak terduga saat upload video: $e");
   }
@@ -50,10 +96,12 @@ Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
 class ScanVideo extends StatefulWidget {
   final List<CameraDescription> cameras;
   final String missionType;
+  final void Function(bool isValid) onValidationComplete;
   const ScanVideo({
     super.key,
     required this.cameras,
     required this.missionType,
+    required this.onValidationComplete,
   });
 
   @override
@@ -197,6 +245,12 @@ class _ScanVideoState extends State<ScanVideo> {
       });
 
       _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        // Tambahkan PENGECUALIAN ini untuk mencegah crash
+        if (!mounted) {
+          timer.cancel();
+          return;
+        }
+
         if (_secondsRecorded >= 8) {
           _stopVideoRecording();
           timer.cancel();
@@ -236,6 +290,10 @@ class _ScanVideoState extends State<ScanVideo> {
     }
 
     _timer?.cancel();
+    if (!mounted) {
+      return;
+    }
+
     setState(() {
       _isRecording = false;
       _isLoading = true;
@@ -252,59 +310,74 @@ class _ScanVideoState extends State<ScanVideo> {
       }
 
       // Snackbar berhasil merekam
-      debugPrint("Menampilkan snackbar: Berhasil merekam video, tunggu notifikasi.");
-      rootScaffoldMessengerKey.currentState?.showSnackBar(
-        const SnackBar(
-          content: Text('Berhasil Merekam Video. Silakan Tunggu Notifikasi'),
-        ),
+      debugPrint(
+        "Menampilkan snackbar: Berhasil merekam video, tunggu notifikasi.",
+      );
+      // Tampilkan snackbar "sedang memproses" (biru)
+      _showCustomSnackbar(
+        'Berhasil Merekam Video. Silakan Tunggu Notifikasi',
+        Colors.blue,
+        Icons.cloud_upload_outlined,
       );
 
-      // Balik ke EcoRewardPage
+      // Navigasi kembali ke halaman sebelumnya (EcoRewardPage)
+      // Kode ini harus dieksekusi segera setelah perekaman berhenti
       debugPrint("Navigasi ke EcoRewardPage...");
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(
-          builder: (context) => EcoRewardPage(cameras: widget.cameras),
-        ),
-      );
+      Navigator.pop(context);
 
       // Upload video + validasi di background
       debugPrint("Mulai upload & validasi video ke Hugging Face...");
-      _sendVideoToHuggingFace(video.path, widget.missionType)
-          .then((result) {
-            debugPrint("Respons Hugging Face diterima: $result");
+      unawaited(
+        _sendVideoToHuggingFace(video.path, widget.missionType)
+            .then((result) {
+              debugPrint("Respons Hugging Face diterima: $result");
 
-            String message;
-            if (result != null) {
-              final isValid = result['is_valid'] ?? false;
-              message = isValid
-                  ? 'Validasi berhasil! Selamat Anda mendapatkan poin!'
-                  : 'Validasi gagal. Objek tidak terdeteksi atau jenis tidak cocok.';
-            } else {
-              message = 'Gagal mendapatkan hasil dari AI. Silakan coba lagi.';
-            }
+              bool isValid = false;
+              String message;
+              Color color;
+              IconData icon;
 
-            debugPrint("Menampilkan snackbar hasil validasi: $message");
-            rootScaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(content: Text(message)),
-            );
+              if (result != null && result['status'] == 'valid') {
+                isValid = true;
+                message = 'Validasi berhasil! Selamat Anda mendapatkan poin!';
+                color = AppColors.fernGreen;
+                icon = Icons.check_circle_outline;
+              } else {
+                message = 'Validasi gagal. Objek tidak terdeteksi atau jenis tidak cocok!';
+                color = Colors.red;
+                icon = Icons.error_outline;
+              }
 
-            if (mounted) {
-              debugPrint("Loading indicator dimatikan.");
-              setState(() => _isLoading = false);
-            }
-          })
-          .catchError((e) {
-            debugPrint("Error saat upload/validasi: $e");
-            rootScaffoldMessengerKey.currentState?.showSnackBar(
-              SnackBar(content: Text('Terjadi error saat validasi: $e')),
-            );
-            if (mounted) setState(() => _isLoading = false);
-          });
+              debugPrint("Menampilkan snackbar hasil validasi: $message");
+              // Tampilkan snackbar hasil validasi (hijau/merah)
+              _showCustomSnackbar(
+                message,
+                color,
+                icon,
+              );
+
+              // Kunci sukses: Mengirim event ke EcoRewardPage melalui GlobalKey
+              if (isValid) {
+                widget.onValidationComplete(true);
+              } else {
+                widget.onValidationComplete(false);
+              }
+            })
+            .catchError((e) {
+              debugPrint("Error saat upload/validasi: $e");
+              _showCustomSnackbar(
+                'Terjadi error saat validasi: $e',
+                Colors.red,
+                Icons.error_outline,
+              );
+              widget.onValidationComplete(false);
+            }),
+      );
     } on CameraException catch (e) {
-      debugPrint("Error saat menghentikan perekaman video: ${e.code}\n${e.description}");
+      debugPrint(
+        "Error saat menghentikan perekaman video: ${e.code}\n${e.description}",
+      );
       if (mounted) {
-        setState(() => _isLoading = false);
         rootScaffoldMessengerKey.currentState?.showSnackBar(
           SnackBar(
             content: Text('Gagal menghentikan perekaman: ${e.description}'),

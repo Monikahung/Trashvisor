@@ -20,6 +20,9 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     with SingleTickerProviderStateMixin {
   String _formattedDate = '';
 
+  final Map<String, bool> _processingMissions = {};
+  final Set<String> _claimableMissions = {};
+
   final List<Map<String, dynamic>> _levelThresholds = const [
     {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
     {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
@@ -47,16 +50,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     _initializeDate();
 
     // animator toast
-    _toastCtl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-      reverseDuration: const Duration(milliseconds: 180),
-    )..addStatusListener((s) {
-        if (s == AnimationStatus.dismissed) {
-          _toastEntry?.remove();
-          _toastEntry = null;
-        }
-      });
+    _toastCtl =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 220),
+          reverseDuration: const Duration(milliseconds: 180),
+        )..addStatusListener((s) {
+          if (s == AnimationStatus.dismissed) {
+            _toastEntry?.remove();
+            _toastEntry = null;
+          }
+        });
 
     // Prefetch misi hari ini supaya tombol langsung “Selesai” kalau sudah done.
     _prefetchCompletedToday();
@@ -90,16 +94,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           left: side,
           right: side,
           child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, -0.2),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(
-                parent: _toastCtl,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            ),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, -0.2),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _toastCtl,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                ),
             child: FadeTransition(
               opacity: _toastCtl,
               child: Material(
@@ -107,11 +112,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
                     children: [
-                      const Icon(Icons.check_circle_outline,
-                          color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
@@ -151,8 +162,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   Future<void> _initializeDate() async {
     await initializeDateFormatting('id_ID', null);
     setState(() {
-      _formattedDate =
-          DateFormat('EEEE, dd - MM - yyyy', 'id_ID').format(DateTime.now());
+      _formattedDate = DateFormat(
+        'EEEE, dd - MM - yyyy',
+        'id_ID',
+      ).format(DateTime.now());
     });
   }
 
@@ -189,7 +202,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       final score = (row['score'] as num?)?.toInt() ?? 0;
 
       final currentLevel = _levelThresholds.firstWhere(
-        (l) => score >= (l['min_score'] as int) && score < (l['max_score'] as int),
+        (l) =>
+            score >= (l['min_score'] as int) && score < (l['max_score'] as int),
         orElse: () => _levelThresholds.last,
       );
 
@@ -280,8 +294,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
         final status = (r['status'] ?? '').toString().toLowerCase();
         // ✅ status kita "completed:<key>" → tetap terdeteksi
-        final ok = ['done', 'completed', 'success', 'selesai', 'finish']
-            .any((k) => status.contains(k));
+        final ok = [
+          'done',
+          'completed',
+          'success',
+          'selesai',
+          'finish',
+        ].any((k) => status.contains(k));
         if (ok) successDays.add(d);
       }
     } catch (e) {
@@ -290,7 +309,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
     // Rakit 7 hari
     final labels = const [
-      'Senin', 'Selasa', 'Rabu', 'Kamis', 'Jumat', 'Sabtu', 'Minggu'
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
     ];
     final List<_DayState> result = [];
     for (int i = 0; i < 7; i++) {
@@ -301,14 +326,16 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       final isCompleted = eligible && successDays.contains(d);
       final hasActivity = eligible && activityDays.contains(d);
       final isCurrent = d == today;
-      result.add(_DayState(
-        label: labels[i],
-        date: d,
-        eligible: eligible,
-        completed: isCompleted,
-        hasActivity: hasActivity,
-        isCurrent: isCurrent,
-      ));
+      result.add(
+        _DayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: isCompleted,
+          hasActivity: hasActivity,
+          isCurrent: isCurrent,
+        ),
+      );
     }
     return result;
   }
@@ -317,7 +344,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   List<_DayState> _weekSkeleton(DateTime createdAt, DateTime today) {
     final monday = _mondayOf(today);
     final labels = const [
-      'Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
     ];
 
     final List<_DayState> out = [];
@@ -326,14 +359,19 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       final beforeCreated = d.isBefore(createdAt);
       final inFuture = d.isAfter(today);
       final eligible = !(beforeCreated || inFuture);
-      out.add(_DayState(
-        label: labels[i],
-        date: d,
-        eligible: eligible,
-        completed: false,
-        hasActivity: false,
-        isCurrent: d.year == today.year && d.month == today.month && d.day == today.day,
-      ));
+      out.add(
+        _DayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: false,
+          hasActivity: false,
+          isCurrent:
+              d.year == today.year &&
+              d.month == today.month &&
+              d.day == today.day,
+        ),
+      );
     }
     return out;
   }
@@ -353,10 +391,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   // Poin per level (brief)
   int _pointsForLevel(String levelName) {
     switch (levelName) {
-      case 'Silver': return 50;
-      case 'Gold':   return 40;
+      case 'Silver':
+        return 50;
+      case 'Gold':
+        return 40;
       case 'Bronze':
-      default:       return 60;
+      default:
+        return 60;
     }
   }
 
@@ -366,35 +407,51 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     return [
       _MissionDef(
         key: 'checkin',
-        title: 'Check-in harian.',
+        title: 'Check-in harian',
         icon: Icons.calendar_today_outlined,
         points: p,
       ),
       _MissionDef(
         key: 'record_paper',
-        title: 'Rekam pembuangan sampah kertas pada tempatnya.',
+        title: 'Rekam pembuangan sampah kertas pada tempatnya',
         icon: Icons.camera_roll_outlined,
         points: p,
       ),
       _MissionDef(
         key: 'record_leaves',
-        title: 'Rekam pembuangan sampah daun pada tempatnya.',
+        title: 'Rekam pembuangan sampah daun pada tempatnya',
         icon: Icons.camera_roll_outlined,
         points: p,
       ),
       _MissionDef(
         key: 'record_plastic_bottle',
-        title: 'Rekam pembuangan sampah botol plastik pada tempatnya.',
+        title: 'Rekam pembuangan sampah botol plastik pada tempatnya',
         icon: Icons.camera_roll_outlined,
         points: p,
       ),
       _MissionDef(
         key: 'record_can',
-        title: 'Rekam pembuangan sampah kaleng minuman pada tempatnya.',
+        title: 'Rekam pembuangan sampah kaleng minuman pada tempatnya',
         icon: Icons.camera_roll_outlined,
         points: p,
       ),
     ];
+  }
+
+  // Untuk mendapatkan missionType
+  String _getMissionType(String missionKey) {
+    switch (missionKey) {
+      case 'record_paper':
+        return 'paper';
+      case 'record_leaves':
+        return 'leaves';
+      case 'record_plastic_bottle':
+        return 'plastic_bottle';
+      case 'record_can':
+        return 'can';
+      default:
+        return '';
+    }
   }
 
   _LevelTheme _themeForLevel(String levelName) {
@@ -402,10 +459,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       case 'Silver':
         return _LevelTheme(
           cardColor: AppColors.oliveGreen,
-          iconAndTextColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          iconAndTextColor: AppColors.darkOliveGreen.withAlpha(
+            (255 * 0.75).round(),
+          ),
           buttonBgColor: AppColors.rewardCardBg,
           iconBgColor: AppColors.rewardCardBg,
-          iconBorderColor: AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          iconBorderColor: AppColors.darkOliveGreen.withAlpha(
+            (255 * 0.75).round(),
+          ),
           pointsBorderColor: AppColors.lightSageGreen,
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
@@ -566,9 +627,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         });
         _showTopToast('Check-in dicatat (mode uji).');
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Gagal menyelesaikan tugas. Coba lagi.')),
-        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Gagal menyelesaikan tugas. Coba lagi.'),
+            ),
+          );
+        }
       }
     }
   }
@@ -636,12 +701,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.rewardWhiteTransparent.withAlpha((255 * 0.5).round()),
+            color: AppColors.rewardWhiteTransparent.withAlpha(
+              (255 * 0.5).round(),
+            ),
             shape: BoxShape.circle,
             border: Border.all(color: AppColors.rewardCardBorder, width: 1),
           ),
           child: IconButton(
-            icon: const Icon(Icons.arrow_back, color: AppColors.rewardCardBorder),
+            icon: const Icon(
+              Icons.arrow_back,
+              color: AppColors.rewardCardBorder,
+            ),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -676,10 +746,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
         Color iconBgColor;
         switch (levelName) {
-          case 'Silver': iconBgColor = Colors.grey.shade500; break;
-          case 'Gold':   iconBgColor = Colors.amber.shade700; break;
+          case 'Silver':
+            iconBgColor = Colors.grey.shade500;
+            break;
+          case 'Gold':
+            iconBgColor = Colors.amber.shade700;
+            break;
           case 'Bronze':
-          default:       iconBgColor = Colors.brown.shade400;
+          default:
+            iconBgColor = Colors.brown.shade400;
         }
 
         return Padding(
@@ -731,11 +806,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                             ),
                           ),
                           SizedBox(width: 4),
-                          Icon(Icons.arrow_forward_ios,
-                              size: 14, color: AppColors.darkMossGreen),
+                          Icon(
+                            Icons.arrow_forward_ios,
+                            size: 14,
+                            color: AppColors.darkMossGreen,
+                          ),
                         ],
                       ),
-                    )
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -751,8 +829,11 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 const SizedBox(height: 8),
                 Row(
                   children: [
-                    const Icon(Icons.monetization_on,
-                        color: AppColors.rewardGold, size: 24),
+                    const Icon(
+                      Icons.monetization_on,
+                      color: AppColors.rewardGold,
+                      size: 24,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       score.toString(),
@@ -849,7 +930,74 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                   const SizedBox(height: 20),
                   // 5 misi unified
                   ...missions.map((m) {
+                    // Deklarasikan semua variabel status di awal
                     final isDone = _completedMissionKeys.contains(m.key);
+                    final isProcessing = _processingMissions[m.key] ?? false;
+                    final isClaimable = _claimableMissions.contains(m.key);
+
+                    VoidCallback? onPressedAction;
+                    String buttonText;
+
+                    // Atur logika tombol berdasarkan status
+                    if (isDone) {
+                      onPressedAction = null;
+                      buttonText = 'Selesai';
+                    } else if (isClaimable) {
+                      buttonText = 'Klaim';
+                      onPressedAction = () {
+                        _completeMission(m, m.points).then((_) {
+                          setState(() {
+                            _claimableMissions.remove(m.key);
+                          });
+                        });
+                      };
+                    } else {
+                      if (isProcessing) {
+                        onPressedAction = null;
+                        buttonText = 'Proses';
+                      } else {
+                        buttonText = 'Mulai';
+                        if (m.key == 'checkin') {
+                          onPressedAction = () => _completeMission(m, m.points);
+                        } else {
+                          onPressedAction = () {
+                            // Aksi untuk misi rekam video
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => ScanVideo(
+                                  cameras: widget.cameras,
+                                  missionType: _getMissionType(m.key),
+                                  onValidationComplete: (bool isValid) {
+                                    // Callback setelah ScanVideo selesai
+                                    setState(() {
+                                      _processingMissions.remove(m.key);
+                                      if (isValid) {
+                                        _claimableMissions.add(m.key);
+                                        _showTopToast(
+                                          'Validasi berhasil! Silakan Klaim poin Anda.',
+                                        );
+                                      } else {
+                                        _showTopToast(
+                                          'Validasi gagal. Coba lagi.',
+                                          bg: Colors.red,
+                                        );
+                                      }
+                                    });
+                                  },
+                                ),
+                              ),
+                            );
+
+                            // Set status "diproses" segera setelah tombol diklik
+                            setState(() {
+                              _processingMissions[m.key] = true;
+                            });
+                          };
+                        }
+                      }
+                    }
+
                     return Padding(
                       padding: const EdgeInsets.only(bottom: 12.0),
                       child: MissionCard(
@@ -864,12 +1012,12 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         pointsBorderColor: theme.pointsBorderColor,
                         pointsTextColor: theme.pointsTextColor,
                         titleColor: theme.titleColor,
-                        buttonText: isDone ? 'Selesai' : 'Mulai',
+                        buttonText: buttonText, // Kirim teks tombol yang sudah ditentukan
                         isCompleted: isDone,
-                        onPressed: isDone ? null : () => _completeMission(m, m.points),
+                        onPressed: onPressedAction, // Kirim aksi tombol yang sudah ditentukan
                       ),
                     );
-                  }),
+                  })
                 ],
               ),
             ),
@@ -930,7 +1078,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
             final days = snap.data;
             if (days == null) {
               return Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 8.0,
+                  vertical: 16.0,
+                ),
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -950,7 +1101,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
             }
 
             return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8.0,
+                vertical: 16.0,
+              ),
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -959,13 +1113,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: days
-                    .map((d) => _buildDayItem(
-                          day: d.label,
-                          eligible: d.eligible,
-                          isCompleted: d.completed,
-                          hasActivity: d.hasActivity,
-                          isCurrent: d.isCurrent,
-                        ))
+                    .map(
+                      (d) => _buildDayItem(
+                        day: d.label,
+                        eligible: d.eligible,
+                        isCompleted: d.completed,
+                        hasActivity: d.hasActivity,
+                        isCurrent: d.isCurrent,
+                      ),
+                    )
                     .toList(),
               ),
             );
@@ -989,16 +1145,24 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     if (!eligible) {
       inner = null; // sebelum akun dibuat / setelah hari ini
     } else if (isProgress) {
-      inner = Icon(Icons.attach_money,
-          color: AppColors.rewardGreenPrimary.withOpacity(0.35), size: 22);
+      inner = Icon(
+        Icons.attach_money,
+        color: AppColors.rewardGreenPrimary.withAlpha((255 * 0.35).round()),
+        size: 22,
+      );
     } else if (isCompleted || hasActivity) {
-      inner = Icon(Icons.monetization_on, color: Colors.amber.shade700, size: 24);
+      inner = Icon(
+        Icons.monetization_on,
+        color: Colors.amber.shade700,
+        size: 24,
+      );
     } else {
       inner = const Icon(Icons.cancel, color: Colors.red, size: 24);
     }
 
-    final borderColor =
-        (isProgress || isCurrent) ? AppColors.rewardGreenPrimary : Colors.grey.shade400;
+    final borderColor = (isProgress || isCurrent)
+        ? AppColors.rewardGreenPrimary
+        : Colors.grey.shade400;
     final borderWidth = (isProgress || isCurrent) ? 2.0 : 1.0;
 
     return Column(
@@ -1026,9 +1190,21 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
   Widget _buildLevelTabs(int selectedLevelIndex) {
     final levelsData = [
-      {'name': 'Bronze', 'color': AppColors.lightSageGreen, 'iconColor': Colors.brown.shade400},
-      {'name': 'Silver', 'color': AppColors.oliveGreen, 'iconColor': Colors.grey.shade500},
-      {'name': 'Gold', 'color': AppColors.mossGreen, 'iconColor': Colors.amber.shade700},
+      {
+        'name': 'Bronze',
+        'color': AppColors.lightSageGreen,
+        'iconColor': Colors.brown.shade400,
+      },
+      {
+        'name': 'Silver',
+        'color': AppColors.oliveGreen,
+        'iconColor': Colors.grey.shade500,
+      },
+      {
+        'name': 'Gold',
+        'color': AppColors.mossGreen,
+        'iconColor': Colors.amber.shade700,
+      },
     ];
 
     return Container(
@@ -1036,7 +1212,12 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       decoration: BoxDecoration(
         color: AppColors.white,
         borderRadius: BorderRadius.circular(30),
-        boxShadow: [BoxShadow(color: Colors.black.withAlpha((255 * 0.1).round()), blurRadius: 5)],
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withAlpha((255 * 0.1).round()),
+            blurRadius: 5,
+          ),
+        ],
       ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -1050,7 +1231,9 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 decoration: BoxDecoration(
-                  color: isSelected ? (level['color'] as Color) : Colors.transparent,
+                  color: isSelected
+                      ? (level['color'] as Color)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.circular(30),
                 ),
                 child: Row(
@@ -1061,8 +1244,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                       color: isSelected && level['name'] == 'Bronze'
                           ? AppColors.black
                           : isSelected
-                              ? AppColors.white
-                              : (level['iconColor'] as Color),
+                          ? AppColors.white
+                          : (level['iconColor'] as Color),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -1072,8 +1255,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         color: isSelected && level['name'] == 'Bronze'
                             ? AppColors.black
                             : isSelected
-                                ? AppColors.white
-                                : AppColors.darkMossGreen,
+                            ? AppColors.white
+                            : AppColors.darkMossGreen,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1093,10 +1276,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 class _DayState {
   final String label;
   final DateTime date;
-  final bool eligible;    // false = sebelum akun dibuat ATAU setelah hari ini
-  final bool completed;   // true = ada mission_history status sukses
+  final bool eligible; // false = sebelum akun dibuat ATAU setelah hari ini
+  final bool completed; // true = ada mission_history status sukses
   final bool hasActivity; // true = ada baris mission_history apapun
-  final bool isCurrent;   // true = hari ini
+  final bool isCurrent; // true = hari ini
 
   _DayState({
     required this.label,

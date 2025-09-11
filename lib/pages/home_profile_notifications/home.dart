@@ -330,11 +330,13 @@ class _HomePageState extends State<HomePage> {
                 title: 'Trash Vision',
                 subtitle: 'Scan sampah untuk mendapatkan detail lebih lanjut',
                 onTap: () {
+                  // *** PEMERIKSAAN PENTING SEBELUM NAVIGASI ***
                   if (_availableCameras != null &&
                       _availableCameras!.isNotEmpty) {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
+                        // Meneruskan _availableCameras ke ScanCamera
                         builder: (context) =>
                             ScanCamera(cameras: _availableCameras!),
                       ),
@@ -420,8 +422,8 @@ class _HomePageState extends State<HomePage> {
                 title: 'Trash Reward',
                 subtitle: 'Kumpulkan poin dan tukar dengan lencana dan uang',
                 onTap: () async {
-                  // 🔁 setelah balik dari EcoReward, refresh skor
-                  await _pushAndRefresh(const EcoRewardPage());
+                  // Setelah balik dari EcoReward, refresh skor
+                  await _pushAndRefresh(EcoRewardPage(cameras: _availableCameras!));
                 },
                 gradient: const LinearGradient(
                   colors: [
@@ -622,6 +624,7 @@ class _HomePageState extends State<HomePage> {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceAround,
         children: [
+          // Home
           IconButton(
             icon: const Icon(
               Icons.home_outlined,
@@ -629,6 +632,7 @@ class _HomePageState extends State<HomePage> {
             ),
             onPressed: () {},
           ),
+          // Trash Chatbot
           IconButton(
             icon: const Icon(
               Icons.chat_outlined,
@@ -644,6 +648,7 @@ class _HomePageState extends State<HomePage> {
             },
           ),
           const SizedBox(width: 48),
+          // Trash Location
           IconButton(
             icon: const Icon(
               Icons.location_on_outlined,
@@ -656,14 +661,15 @@ class _HomePageState extends State<HomePage> {
               );
             },
           ),
+          // Trash Reward
           IconButton(
             icon: const Icon(
               Icons.card_giftcard_outlined,
               color: AppColors.darkOliveGreen,
             ),
             onPressed: () async {
-              // opsional: buka reward dari bottom icon dan refresh score
-              await _pushAndRefresh(const EcoRewardPage());
+              // Buka reward dari bottom icon dan refresh score
+              await _pushAndRefresh(EcoRewardPage(cameras: _availableCameras!));
             },
           ),
         ],
