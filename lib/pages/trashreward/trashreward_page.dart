@@ -20,6 +20,129 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     with SingleTickerProviderStateMixin {
   String _formattedDate = '';
 
+  // Method to reload profile and daily row data, and update UI
+  Future<void> _fetchData() async {
+    setState(() {
+      _profileData = _loadProfileAndLevelInfo();
+      _dailyRow = _loadDailyRowData();
+    });
+    await _fetchMissionHistory();
+    await _prefetchCompletedToday();
+  }
+
+  Future<void> _fetchMissionHistory() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Tambahkan filter tanggal hari ini untuk performa
+      final today = _yyyyMmDd(_dateOnly(DateTime.now()));
+      
+      final rows = await client
+          .from('mission_history')
+          .select('id, status, mission_type(*)')
+          .eq('user_id', user.id)
+          .eq('mission_date', today) // 👈 Fokus hanya hari ini
+          .order('created_at', ascending: false);
+
+      _processingMissions.clear();
+      _claimableMissions.clear();
+      _completedMissionKeys.clear();
+
+      for (final r in rows as List) {
+        final rawStatus = (r['status'] ?? '').toString();
+        
+        // Parse dengan lebih akurat
+        if (rawStatus.contains(':')) {
+          final parts = rawStatus.split(':');
+          final state = parts[0];
+          final missionKey = parts.length > 1 ? parts.sublist(1).join(':') : '';
+
+          if (missionKey.isNotEmpty) {
+            switch (state) {
+              case 'processing':
+                _processingMissions[missionKey] = true; // 👈 Ini yang missing
+                break;
+              case 'completed':
+              case 'claim':
+              case 'valid':
+                _claimableMissions.add(missionKey);
+                break;
+              case 'claimed':
+              case 'complete':
+                _completedMissionKeys.add(missionKey);
+                break;
+            }
+          }
+        }
+      }
+
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('Error fetching mission history: $e');
+    }
+  }
+
+  // Fungsi untuk mengklaim poin
+  Future<void> _claimReward(_MissionDef m) async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) return;
+
+    try {
+      // Cari baris yang statusnya completed:<key>
+      final missionRow = await client
+          .from('mission_history')
+          .select('id, mission_type!inner(mission_id, points)')
+          .eq('user_id', user.id)
+          .like('status', 'completed:%')
+          .eq('mission_type.mission_id', m.key)
+          .maybeSingle();
+
+      if (missionRow == null) {
+        _showTopToast('Tidak ada misi yang bisa diklaim.', bg: Colors.orange);
+        return;
+      }
+
+      final int missionHistoryId = missionRow['id'];
+      final int points = (missionRow['mission_type']['points'] as num).toInt();
+
+      // Update status jadi claimed:<key>
+      await client
+          .from('mission_history')
+          .update({'status': 'claimed:${m.key}'})
+          .eq('id', missionHistoryId);
+
+      // Tambah poin via RPC
+      await client.rpc(
+        'increment_score',
+        params: {'p_user_id': user.id, 'p_amount': points},
+      );
+
+      _showTopToast('Tugas selesai! +$points poin!', bg: AppColors.fernGreen);
+      await _fetchData();
+    } catch (e) {
+      debugPrint('Error saat mengklaim reward: $e');
+      _showTopToast('Gagal mengklaim poin.', bg: Colors.red);
+    }
+  }
+
+  Future<void> _updateMissionStatus(String key, String status) async {
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final today = DateTime.now();
+
+    await Supabase.instance.client.from('mission_history').upsert({
+      'user_id': user.id,
+      'mission_date': DateTime(today.year, today.month, today.day).toIso8601String(),
+      'status': '$status:$key', // ⬅️ format unified (processing:key / completed:key / claimed:key)
+      'created_at': DateTime.now().toIso8601String(),
+    });
+  }
+
+
   final Map<String, bool> _processingMissions = {};
   final Set<String> _claimableMissions = {};
 
@@ -444,11 +567,11 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       case 'record_paper':
         return 'paper';
       case 'record_leaves':
-        return 'leaves';
+        return 'leaf';
       case 'record_plastic_bottle':
         return 'plastic_bottle';
       case 'record_can':
-        return 'can';
+        return 'drink_cans';
       default:
         return '';
     }
@@ -940,59 +1063,79 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
                     // Atur logika tombol berdasarkan status
                     if (isDone) {
-                      onPressedAction = null;
                       buttonText = 'Selesai';
+                      onPressedAction = null;
                     } else if (isClaimable) {
                       buttonText = 'Klaim';
-                      onPressedAction = () {
-                        _completeMission(m, m.points).then((_) {
-                          setState(() {
-                            _claimableMissions.remove(m.key);
-                          });
-                        });
+                      onPressedAction = () async {
+                        await _claimReward(m);
+                        await _updateMissionStatus(m.key, 'claimed');
+                        _showTopToast('Berhasil mengklaim ${m.points} poin!', bg: AppColors.rewardGreenPrimary);
+                        await _fetchData();
                       };
                     } else {
                       if (isProcessing) {
-                        onPressedAction = null;
                         buttonText = 'Proses';
+                        onPressedAction = null;
                       } else {
                         buttonText = 'Mulai';
                         if (m.key == 'checkin') {
                           onPressedAction = () => _completeMission(m, m.points);
                         } else {
-                          onPressedAction = () {
-                            // Aksi untuk misi rekam video
-                            Navigator.push(
-                              context,
+                          onPressedAction = () async {
+                            final user = Supabase.instance.client.auth.currentUser;
+                            if (user == null) {
+                              _showTopToast('Silakan login terlebih dahulu.', bg: Colors.red);
+                              return;
+                            }
+
+                            // tulis ke DB: processing:<key>
+                            await _updateMissionStatus(m.key, 'processing');
+
+                            // optimistic UI
+                            setState(() {
+                              _processingMissions[m.key] = true;
+                            });
+
+                            final navContext = context;
+                            await Navigator.push(
+                              // ignore: use_build_context_synchronously
+                              navContext,
                               MaterialPageRoute(
-                                builder: (context) => ScanVideo(
+                                builder: (_) => ScanVideo(
                                   cameras: widget.cameras,
                                   missionType: _getMissionType(m.key),
-                                  onValidationComplete: (bool isValid) {
-                                    // Callback setelah ScanVideo selesai
-                                    setState(() {
-                                      _processingMissions.remove(m.key);
-                                      if (isValid) {
-                                        _claimableMissions.add(m.key);
-                                        _showTopToast(
-                                          'Validasi berhasil! Silakan Klaim poin Anda.',
-                                        );
-                                      } else {
-                                        _showTopToast(
-                                          'Validasi gagal. Coba lagi.',
-                                          bg: Colors.red,
-                                        );
+                                  onValidationComplete: (bool isValid) async {
+                                    if (!mounted) return;
+
+                                    if (isValid) {
+                                      // setelah validasi sukses, tandai completed:<key> (siap klaim)
+                                      await _updateMissionStatus(m.key, 'claim');
+
+                                      if (!mounted) return;
+                                      _showTopToast('Validasi berhasil! Silakan Klaim poin Anda.',
+                                          bg: AppColors.fernGreen);
+                                    } else {
+                                      final user = Supabase.instance.client.auth.currentUser;
+                                      if (user != null) {
+                                        await Supabase.instance.client.from('mission_history').delete().match({
+                                          'user_id': user.id,
+                                          'status': 'processing:${m.key}',
+                                        });
                                       }
-                                    });
+
+                                      _showTopToast('Validasi gagal. Coba lagi.', bg: Colors.red);
+
+                                      // optional: kamu bisa reset status DB atau biarkan 'processing:<key>'
+                                      // await _updateMissionStatus(m.key, 'processing'); // atau hapus/ubah
+                                    }
+
+                                    if (!mounted) return;
+                                    await _fetchData();
                                   },
                                 ),
                               ),
                             );
-
-                            // Set status "diproses" segera setelah tombol diklik
-                            setState(() {
-                              _processingMissions[m.key] = true;
-                            });
                           };
                         }
                       }
@@ -1012,12 +1155,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         pointsBorderColor: theme.pointsBorderColor,
                         pointsTextColor: theme.pointsTextColor,
                         titleColor: theme.titleColor,
-                        buttonText: buttonText, // Kirim teks tombol yang sudah ditentukan
+                        buttonText:
+                            buttonText, // Kirim teks tombol yang sudah ditentukan
                         isCompleted: isDone,
-                        onPressed: onPressedAction, // Kirim aksi tombol yang sudah ditentukan
+                        onPressed: onPressedAction,
                       ),
                     );
-                  })
+                  }),
                 ],
               ),
             ),

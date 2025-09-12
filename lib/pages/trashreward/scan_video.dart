@@ -4,9 +4,12 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:dio/dio.dart';
 import 'package:trashvisor/core/colors.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' hide MultipartFile;
 import 'guide_video.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../globals.dart';
+
+final supabase = Supabase.instance.client;
 
 // Fungsi untuk menampilkan snackbar kustom
 void _showCustomSnackbar(
@@ -309,6 +312,19 @@ class _ScanVideoState extends State<ScanVideo> {
         return;
       }
 
+      debugPrint("Mencatat misi ke database dengan status 'processing'...");
+      final now = DateTime.now();
+      await supabase.from('mission_history').insert({
+        // Ganti dengan cara Anda mendapatkan ID pengguna saat ini.
+        // Jika Anda menggunakan Supabase Auth, kode ini sudah benar.
+        'user_id': supabase.auth.currentUser!.id,
+        'mission_date': now.toIso8601String().substring(0, 10), // Hanya tanggal
+        'status': 'processing',
+        'created_at': now.toIso8601String(),
+      });
+
+      debugPrint("Misi berhasil dicatat sebagai 'processing' di database.");
+
       // Snackbar berhasil merekam
       debugPrint(
         "Menampilkan snackbar: Berhasil merekam video, tunggu notifikasi.",
@@ -323,6 +339,7 @@ class _ScanVideoState extends State<ScanVideo> {
       // Navigasi kembali ke halaman sebelumnya (EcoRewardPage)
       // Kode ini harus dieksekusi segera setelah perekaman berhenti
       debugPrint("Navigasi ke EcoRewardPage...");
+      // ignore: use_build_context_synchronously
       Navigator.pop(context);
 
       // Upload video + validasi di background
