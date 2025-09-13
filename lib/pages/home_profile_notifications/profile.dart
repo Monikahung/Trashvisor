@@ -84,7 +84,6 @@ class _ProfilePageState extends State<ProfilePage>
   void _showTopBanner(
     String message, {
     Color bg = AppColors.fernGreen,
-    Color fg = Colors.white,
   }) {
     _bannerTimer?.cancel();
     _bannerMessage = message;
@@ -581,7 +580,7 @@ class _ProfilePageState extends State<ProfilePage>
               height: 80,
               width: 80,
               decoration: BoxDecoration(
-                color: AppColors.fernGreen.withOpacity(0.2),
+                color: AppColors.fernGreen.withAlpha((255 * 0.2).round()),
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.fernGreen, width: 2),
               ),

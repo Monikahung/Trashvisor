@@ -368,7 +368,7 @@ class _ScanVideoState extends State<ScanVideo> {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.red.withOpacity(0.7),
+                      color: Colors.red.withAlpha((255 * 0.7).round()),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(
