@@ -18,7 +18,13 @@ void _showCustomSnackbar(String message, Color color, IconData icon) {
         children: [
           Icon(icon, color: Colors.white),
           const SizedBox(width: 10),
-          Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
+          Expanded(
+            child: Text(
+              message, 
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Roboto',
+                fontSize: 14))),
         ],
       ),
       backgroundColor: color,
@@ -373,7 +379,11 @@ class _ScanVideoState extends State<ScanVideo> {
                     ),
                     child: const Text(
                       'Merekam maksimal 8 detik',
-                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                      style: TextStyle(
+                        color: Colors.white, 
+                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Roboto',
+                        fontSize: 14),
                     ),
                   ),
                 ),

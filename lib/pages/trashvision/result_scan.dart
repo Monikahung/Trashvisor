@@ -474,7 +474,7 @@ class _ResultScanState extends State<ResultScan> {
                   topRight: Radius.circular(20),
                   bottomRight: Radius.circular(20),
                 ),
-                child: Image.asset(imagePath, fit: BoxFit.cover, width: 130),
+                child: Image.asset(imagePath, fit: BoxFit.cover, width: 147.5),
               ),
             ],
           ),
