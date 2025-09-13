@@ -11,24 +11,14 @@ import '../../globals.dart';
 
 final supabase = Supabase.instance.client;
 
-// Fungsi untuk menampilkan snackbar kustom
-void _showCustomSnackbar(
-  String message,
-  Color color,
-  IconData icon,
-) {
+void _showCustomSnackbar(String message, Color color, IconData icon) {
   rootScaffoldMessengerKey.currentState?.showSnackBar(
     SnackBar(
       content: Row(
         children: [
           Icon(icon, color: Colors.white),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
+          Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
         ],
       ),
       backgroundColor: color,
@@ -39,17 +29,17 @@ void _showCustomSnackbar(
   );
 }
 
-// Fungsi upload video ke Hugging Face
+String _yyyyMmDd(DateTime d) =>
+    '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
 Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
   String videoPath,
   String missionType,
 ) async {
   final dio = Dio();
-  const url =
-      'https://monikahung-git-detection-video-throw-garbage.hf.space/validate';
+  const url = 'https://monikahung-git-detection-video-throw-garbage.hf.space/validate';
 
   try {
-    debugPrint("Mengirim video ke Hugging Face: $videoPath");
     final formData = FormData.fromMap({
       'file': await MultipartFile.fromFile(videoPath, filename: 'upload.mp4'),
       'mission_type': missionType,
@@ -61,50 +51,33 @@ Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
       options: Options(headers: {'Content-Type': 'multipart/form-data'}),
     );
 
-    debugPrint("Response status: ${response.statusCode}");
-
     if (response.statusCode == 200) {
-      debugPrint("Data respons mentah: ${response.data.toString()}");
-      
-      try {
-        if (response.data is Map<String, dynamic>) {
-          debugPrint("Respons adalah Map.");
-          return response.data;
-        } else if (response.data is String) {
-          final decodedData = jsonDecode(response.data);
-          debugPrint("Respons di-decode dari String.");
-          if (decodedData is Map<String, dynamic>) {
-            return decodedData;
-          }
-        }
-      } catch (e) {
-        debugPrint("Gagal mengolah data respons: $e");
+      if (response.data is Map<String, dynamic>) return response.data;
+      if (response.data is String) {
+        final decoded = jsonDecode(response.data);
+        if (decoded is Map<String, dynamic>) return decoded;
       }
-    } else {
-      debugPrint("Upload gagal, status code: ${response.statusCode}");
-    }
-  } on DioException catch (e) {
-    debugPrint("Error saat upload video (DioException): $e");
-    if (e.response != null) {
-      debugPrint("Error Response Data: ${e.response?.data}");
-      debugPrint("Error Response Status: ${e.response?.statusCode}");
     }
   } catch (e) {
-    debugPrint("Error tidak terduga saat upload video: $e");
+    debugPrint("Upload/validate error: $e");
   }
-
   return null;
 }
 
 class ScanVideo extends StatefulWidget {
   final List<CameraDescription> cameras;
   final String missionType;
+  final String missionKey;                  // agar status “xxx:<key>”
+  final String? reuseRowId;                 // NEW: id row 'failed' yang mau di-reuse (boleh null)
   final void Function(bool isValid) onValidationComplete;
+
   const ScanVideo({
     super.key,
     required this.cameras,
     required this.missionType,
+    required this.missionKey,
     required this.onValidationComplete,
+    this.reuseRowId,
   });
 
   @override
@@ -120,6 +93,9 @@ class _ScanVideoState extends State<ScanVideo> {
   Timer? _timer;
   int _secondsRecorded = 0;
 
+  // NEW: simpan id baris yang lagi dipakai (reused / inserted)
+  String? _rowIdInUse;
+
   @override
   void initState() {
     super.initState();
@@ -129,32 +105,19 @@ class _ScanVideoState extends State<ScanVideo> {
   Future<void> _requestPermissions() async {
     final cameraStatus = await Permission.camera.request();
     final microphoneStatus = await Permission.microphone.request();
-
-    // Check if the widget is still mounted before using context
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     if (cameraStatus.isGranted && microphoneStatus.isGranted) {
-      // If permissions are granted, initialize the camera
       _initializeCamera(widget.cameras.first);
     } else {
-      // If permissions are denied, show a message
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text(
-            'Izin kamera dan mikrofon ditolak. Aplikasi tidak dapat merekam.',
-          ),
-        ),
+        const SnackBar(content: Text('Izin kamera & mikrofon ditolak.')),
       );
     }
   }
 
-  // Fungsi untuk inisialisasi kamera
   void _initializeCamera(CameraDescription camera) {
-    if (_controller != null) {
-      return;
-    }
+    if (_controller != null) return;
 
     _controller = CameraController(
       camera,
@@ -162,23 +125,12 @@ class _ScanVideoState extends State<ScanVideo> {
       enableAudio: false,
     );
 
-    _controller
-        ?.initialize()
-        .then((_) {
-          if (!mounted) {
-            return;
-          }
-          setState(() {
-            _isControllerInitialized = true;
-          });
-        })
-        .catchError((e) {
-          if (e is CameraException) {
-            debugPrint(
-              'Error saat inisialisasi kamera: ${e.code}\n${e.description}',
-            );
-          }
-        });
+    _controller?.initialize().then((_) {
+      if (!mounted) return;
+      setState(() => _isControllerInitialized = true);
+    }).catchError((e) {
+      debugPrint('Camera init error: $e');
+    });
   }
 
   @override
@@ -189,56 +141,34 @@ class _ScanVideoState extends State<ScanVideo> {
     super.dispose();
   }
 
-  // Fungsi untuk beralih kamera
   void _toggleCamera() async {
-    if (_controller == null || !_isControllerInitialized) {
-      return;
-    }
-
-    if (_isRecording) {
-      await _stopVideoRecording();
-    }
+    if (_controller == null || !_isControllerInitialized) return;
+    if (_isRecording) await _stopVideoRecording();
 
     final newCamera =
         (_controller!.description.lensDirection == CameraLensDirection.front)
-        ? widget.cameras.firstWhere(
-            (camera) => camera.lensDirection == CameraLensDirection.back,
-          )
-        : widget.cameras.firstWhere(
-            (camera) => camera.lensDirection == CameraLensDirection.front,
-          );
+            ? widget.cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back)
+            : widget.cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front);
 
     await _controller!.dispose();
     _controller = null;
-
-    setState(() {
-      _isControllerInitialized = false;
-    });
-
+    setState(() => _isControllerInitialized = false);
     _initializeCamera(newCamera);
   }
 
   Future<void> _toggleFlash() async {
-    if (_controller == null || !_controller!.value.isInitialized) {
-      return;
-    }
-    final nextFlashMode = _flashMode == FlashMode.off
-        ? FlashMode.torch
-        : FlashMode.off;
+    if (_controller == null || !_controller!.value.isInitialized) return;
+    final next = _flashMode == FlashMode.off ? FlashMode.torch : FlashMode.off;
     try {
-      await _controller!.setFlashMode(nextFlashMode);
-      setState(() => _flashMode = nextFlashMode);
-    } on CameraException catch (e) {
-      debugPrint('Error saat mengubah flash mode: $e');
-    }
+      await _controller!.setFlashMode(next);
+      setState(() => _flashMode = next);
+    } catch (_) {}
   }
 
   Future<void> _startVideoRecording() async {
     if (_controller == null ||
         !_controller!.value.isInitialized ||
-        _controller!.value.isRecordingVideo) {
-      return;
-    }
+        _controller!.value.isRecordingVideo) return;
 
     try {
       setState(() {
@@ -247,55 +177,115 @@ class _ScanVideoState extends State<ScanVideo> {
         _secondsRecorded = 0;
       });
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        // Tambahkan PENGECUALIAN ini untuk mencegah crash
+      _timer = Timer.periodic(const Duration(seconds: 1), (t) {
         if (!mounted) {
-          timer.cancel();
+          t.cancel();
           return;
         }
-
         if (_secondsRecorded >= 8) {
           _stopVideoRecording();
-          timer.cancel();
+          t.cancel();
         } else {
-          setState(() {
-            _secondsRecorded++;
-          });
+          setState(() => _secondsRecorded++);
         }
       });
 
       await _controller!.startVideoRecording();
-      debugPrint("Perekaman video dimulai.");
-    } on CameraException catch (e) {
-      debugPrint(
-        "Error saat memulai perekaman video: ${e.code}\n${e.description}",
-      );
-
-      if (!mounted) {
-        return;
-      }
-
+    } catch (e) {
+      if (!mounted) return;
       setState(() {
         _isRecording = false;
         _isLoading = false;
       });
-
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Gagal memulai perekaman: ${e.description}')),
+        SnackBar(content: Text('Gagal mulai rekam: $e')),
       );
     }
   }
 
-  Future<void> _stopVideoRecording() async {
-    if (_controller == null || !_controller!.value.isRecordingVideo) {
-      debugPrint("Controller null atau tidak dalam mode merekam.");
-      return;
+  /// NEW: tulis `processing:<key>` dengan REUSE row gagal jika ada.
+  Future<void> _markProcessing() async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final todayStr = _yyyyMmDd(DateTime.now());
+    final processing = 'processing:${widget.missionKey}';
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      // Kalau dikasih reuseRowId -> update row itu jadi 'processing'
+      if (widget.reuseRowId != null && widget.reuseRowId!.isNotEmpty) {
+        final updated = await supabase
+            .from('mission_history')
+            .update({'status': processing, 'created_at': nowIso})
+            .eq('id', widget.reuseRowId!) // non-null !
+            .select('id')
+            .maybeSingle();
+
+        if (updated != null) {
+          _rowIdInUse = (updated['id'] ?? widget.reuseRowId!).toString();
+          return;
+        }
+        // Jika entah kenapa update gagal, fallback ke insert di bawah.
+      }
+
+      // Insert baris baru processing
+      final inserted = await supabase
+          .from('mission_history')
+          .insert({
+            'user_id': user.id,
+            'mission_date': todayStr,
+            'status': processing,
+            'created_at': nowIso,
+          })
+          .select('id')
+          .maybeSingle();
+
+      _rowIdInUse = (inserted?['id'] ?? '').toString();
+    } catch (e) {
+      debugPrint('markProcessing error: $e');
     }
+  }
+
+  /// NEW: transisi processing → completed/failed di ROW YANG SAMA bila _rowIdInUse ada.
+  Future<void> _transitionProcessing({required bool success}) async {
+    final user = supabase.auth.currentUser;
+    if (user == null) return;
+
+    final todayStr = _yyyyMmDd(DateTime.now());
+    final toStatus = success ? 'completed:${widget.missionKey}' : 'failed:${widget.missionKey}';
+
+    try {
+      if (_rowIdInUse != null && _rowIdInUse!.isNotEmpty) {
+        await supabase
+            .from('mission_history')
+            .update({'status': toStatus})
+            .eq('id', _rowIdInUse!) // non-null !
+            .select('id')
+            .maybeSingle();
+        return;
+      }
+
+      // Fallback lama (jaga-jaga)
+      await supabase
+          .from('mission_history')
+          .update({'status': toStatus})
+          .match({
+            'user_id': user.id,
+            'mission_date': todayStr,
+            'status': 'processing:${widget.missionKey}',
+          })
+          .select('id');
+    } catch (e) {
+      debugPrint('transitionProcessing error: $e');
+    }
+  }
+
+  Future<void> _stopVideoRecording() async {
+    if (_controller == null || !_controller!.value.isRecordingVideo) return;
 
     _timer?.cancel();
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
 
     setState(() {
       _isRecording = false;
@@ -303,102 +293,45 @@ class _ScanVideoState extends State<ScanVideo> {
     });
 
     try {
-      debugPrint("Menghentikan perekaman video...");
       final XFile video = await _controller!.stopVideoRecording();
-      debugPrint("Perekaman selesai. File: ${video.path}");
 
-      if (!mounted) {
-        debugPrint("Widget sudah unmounted setelah stop recording.");
-        return;
-      }
+      // 1) tandai processing (REUSE row bila ada)
+      await _markProcessing();
 
-      debugPrint("Mencatat misi ke database dengan status 'processing'...");
-      final now = DateTime.now();
-      await supabase.from('mission_history').insert({
-        // Ganti dengan cara Anda mendapatkan ID pengguna saat ini.
-        // Jika Anda menggunakan Supabase Auth, kode ini sudah benar.
-        'user_id': supabase.auth.currentUser!.id,
-        'mission_date': now.toIso8601String().substring(0, 10), // Hanya tanggal
-        'status': 'processing',
-        'created_at': now.toIso8601String(),
-      });
-
-      debugPrint("Misi berhasil dicatat sebagai 'processing' di database.");
-
-      // Snackbar berhasil merekam
-      debugPrint(
-        "Menampilkan snackbar: Berhasil merekam video, tunggu notifikasi.",
-      );
-      // Tampilkan snackbar "sedang memproses" (biru)
+      // 2) Snackbar info & kembali ke parent → parent ubah tombol ke "Proses"
       _showCustomSnackbar(
-        'Berhasil Merekam Video. Silakan Tunggu Notifikasi',
+        'Berhasil merekam. Validasi sedang diproses...',
         Colors.blue,
         Icons.cloud_upload_outlined,
       );
+      Navigator.pop(context, true);
 
-      // Navigasi kembali ke halaman sebelumnya (EcoRewardPage)
-      // Kode ini harus dieksekusi segera setelah perekaman berhenti
-      debugPrint("Navigasi ke EcoRewardPage...");
-      // ignore: use_build_context_synchronously
-      Navigator.pop(context);
-
-      // Upload video + validasi di background
-      debugPrint("Mulai upload & validasi video ke Hugging Face...");
+      // 3) Upload + validasi (background)
       unawaited(
-        _sendVideoToHuggingFace(video.path, widget.missionType)
-            .then((result) {
-              debugPrint("Respons Hugging Face diterima: $result");
+        _sendVideoToHuggingFace(video.path, widget.missionType).then((result) async {
+          final isValid = (result != null && result['status'] == 'valid');
 
-              bool isValid = false;
-              String message;
-              Color color;
-              IconData icon;
+          await _transitionProcessing(success: isValid);
 
-              if (result != null && result['status'] == 'valid') {
-                isValid = true;
-                message = 'Validasi berhasil! Selamat Anda mendapatkan poin!';
-                color = AppColors.fernGreen;
-                icon = Icons.check_circle_outline;
-              } else {
-                message = 'Validasi gagal. Objek tidak terdeteksi atau jenis tidak cocok!';
-                color = Colors.red;
-                icon = Icons.error_outline;
-              }
+          _showCustomSnackbar(
+            isValid
+                ? 'Validasi berhasil! Silakan klaim poin.'
+                : 'Validasi gagal. Coba rekam lagi.',
+            isValid ? AppColors.fernGreen : Colors.red,
+            isValid ? Icons.check_circle_outline : Icons.error_outline,
+          );
 
-              debugPrint("Menampilkan snackbar hasil validasi: $message");
-              // Tampilkan snackbar hasil validasi (hijau/merah)
-              _showCustomSnackbar(
-                message,
-                color,
-                icon,
-              );
-
-              // Kunci sukses: Mengirim event ke EcoRewardPage melalui GlobalKey
-              if (isValid) {
-                widget.onValidationComplete(true);
-              } else {
-                widget.onValidationComplete(false);
-              }
-            })
-            .catchError((e) {
-              debugPrint("Error saat upload/validasi: $e");
-              _showCustomSnackbar(
-                'Terjadi error saat validasi: $e',
-                Colors.red,
-                Icons.error_outline,
-              );
-              widget.onValidationComplete(false);
-            }),
+          widget.onValidationComplete(isValid);
+        }).catchError((e) async {
+          await _transitionProcessing(success: false);
+          _showCustomSnackbar('Terjadi error saat validasi.', Colors.red, Icons.error_outline);
+          widget.onValidationComplete(false);
+        }),
       );
-    } on CameraException catch (e) {
-      debugPrint(
-        "Error saat menghentikan perekaman video: ${e.code}\n${e.description}",
-      );
+    } catch (e) {
       if (mounted) {
         rootScaffoldMessengerKey.currentState?.showSnackBar(
-          SnackBar(
-            content: Text('Gagal menghentikan perekaman: ${e.description}'),
-          ),
+          SnackBar(content: Text('Gagal stop rekam: $e')),
         );
       }
     }
@@ -406,8 +339,8 @@ class _ScanVideoState extends State<ScanVideo> {
 
   @override
   Widget build(BuildContext context) {
-    final screenHeight = MediaQuery.of(context).size.height;
-    final screenWidth = MediaQuery.of(context).size.width;
+    final h = MediaQuery.of(context).size.height;
+    final w = MediaQuery.of(context).size.width;
 
     return Scaffold(
       backgroundColor: Colors.black,
@@ -417,8 +350,8 @@ class _ScanVideoState extends State<ScanVideo> {
             Column(
               children: [
                 _buildAppBar(context),
-                Expanded(child: _buildCameraView(screenHeight, screenWidth)),
-                _buildCameraControls(screenHeight, screenWidth),
+                Expanded(child: _buildCameraView(h, w)),
+                _buildCameraControls(h, w),
               ],
             ),
             if (_isLoading)
@@ -430,49 +363,30 @@ class _ScanVideoState extends State<ScanVideo> {
               ),
             if (_isRecording)
               Positioned(
-                top: 100,
-                left: 0,
-                right: 0,
+                top: 100, left: 0, right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 8,
-                    ),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
-                      color: Colors.red.withAlpha((255 * 0.7).round()),
+                      color: Colors.red.withOpacity(0.7),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(
                       'Merekam maksimal 8 detik',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ),
             if (_isRecording)
               Positioned(
-                bottom: screenHeight * 0.35,
-                left: 0,
-                right: 0,
+                bottom: h * 0.35, left: 0, right: 0,
                 child: Center(
                   child: Text(
                     '$_secondsRecorded',
                     style: const TextStyle(
-                      fontFamily: 'Nunito',
-                      fontSize: 30,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(
-                          color: Colors.black54,
-                          blurRadius: 2,
-                          offset: Offset(1, 1),
-                        ),
-                      ],
+                      fontFamily: 'Nunito', fontSize: 30, color: Colors.white, fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))],
                     ),
                   ),
                 ),
@@ -516,13 +430,10 @@ class _ScanVideoState extends State<ScanVideo> {
                 padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Row(
                   children: [
-                    Text(
-                      'Panduan',
+                    Text('Panduan',
                       style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 14,
-                        color: AppColors.fernGreen,
-                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Nunito', fontSize: 14,
+                        color: AppColors.fernGreen, fontWeight: FontWeight.bold,
                       ),
                     ),
                     SizedBox(width: 8),
@@ -537,7 +448,7 @@ class _ScanVideoState extends State<ScanVideo> {
     );
   }
 
-  Widget _buildCameraView(double screenHeight, double screenWidth) {
+  Widget _buildCameraView(double h, double w) {
     if (!_isControllerInitialized || _controller == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -545,25 +456,14 @@ class _ScanVideoState extends State<ScanVideo> {
       alignment: Alignment.center,
       children: [
         CameraPreview(_controller!),
-        CustomPaint(
-          size: Size(screenWidth * 0.8, screenHeight * 0.5),
-          painter: ViewfinderPainter(),
-        ),
-        Positioned(
+        CustomPaint(size: Size(w * 0.8, h * 0.5), painter: ViewfinderPainter()),
+        const Positioned(
           bottom: 20,
           child: Text(
             'Arahkan kamera saat membuang sampah',
             style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: 14,
-              color: Colors.white,
-              shadows: [
-                Shadow(
-                  color: Colors.black54,
-                  blurRadius: 2,
-                  offset: Offset(1, 1),
-                ),
-              ],
+              fontFamily: 'Roboto', fontSize: 14, color: Colors.white,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))],
             ),
           ),
         ),
@@ -571,54 +471,34 @@ class _ScanVideoState extends State<ScanVideo> {
     );
   }
 
-  Widget _buildCameraControls(double screenHeight, double screenWidth) {
+  Widget _buildCameraControls(double h, double w) {
     return Container(
       color: AppColors.whiteSmoke,
-      padding: EdgeInsets.symmetric(
-        vertical: screenHeight * 0.05,
-        horizontal: screenWidth * 0.1,
-      ),
+      padding: EdgeInsets.symmetric(vertical: h * 0.05, horizontal: w * 0.1),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: Icon(
-              _flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
-              color: AppColors.fernGreen,
-              size: 30,
-            ),
+            icon: Icon(_flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
+              color: AppColors.fernGreen, size: 30),
             onPressed: _toggleFlash,
           ),
           Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: AppColors.fernGreen, width: 4),
-            ),
+            width: 70, height: 70,
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.fernGreen, width: 4)),
             child: Center(
               child: Container(
-                width: 55,
-                height: 55,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color: _isRecording ? Colors.red : AppColors.fernGreen,
-                ),
+                width: 55, height: 55,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: _isRecording ? Colors.red : AppColors.fernGreen),
                 child: InkWell(
-                  onTap: _isRecording
-                      ? _stopVideoRecording
-                      : _startVideoRecording,
+                  onTap: _isRecording ? _stopVideoRecording : _startVideoRecording,
                   borderRadius: BorderRadius.circular(55 / 2),
                 ),
               ),
             ),
           ),
           IconButton(
-            icon: Icon(
-              Icons.cameraswitch,
-              color: AppColors.fernGreen,
-              size: 30,
-            ),
+            icon: const Icon(Icons.cameraswitch, color: AppColors.fernGreen, size: 30),
             onPressed: _toggleCamera,
           ),
         ],
@@ -635,43 +515,16 @@ class ViewfinderPainter extends CustomPainter {
       ..style = PaintingStyle.stroke
       ..strokeWidth = 3;
 
-    const cornerRadius = 20.0;
-    const lineLength = 50.0;
-    final path = Path();
+    const r = 20.0;
+    const l = 50.0;
+    final p = Path();
 
-    path.moveTo(0, lineLength);
-    path.lineTo(0, cornerRadius);
-    path.arcToPoint(
-      const Offset(cornerRadius, 0),
-      radius: const Radius.circular(cornerRadius),
-    );
-    path.lineTo(lineLength, 0);
+    p.moveTo(0, l); p.lineTo(0, r); p.arcToPoint(const Offset(r, 0), radius: const Radius.circular(r)); p.lineTo(l, 0);
+    p.moveTo(size.width - l, 0); p.lineTo(size.width - r, 0); p.arcToPoint(Offset(size.width, r), radius: const Radius.circular(r)); p.lineTo(size.width, l);
+    p.moveTo(size.width, size.height - l); p.lineTo(size.width, size.height - r); p.arcToPoint(Offset(size.width - r, size.height), radius: const Radius.circular(r)); p.lineTo(size.width - l, size.height);
+    p.moveTo(l, size.height); p.lineTo(r, size.height); p.arcToPoint(Offset(0, size.height - r), radius: const Radius.circular(r)); p.lineTo(0, size.height - l);
 
-    path.moveTo(size.width - lineLength, 0);
-    path.lineTo(size.width - cornerRadius, 0);
-    path.arcToPoint(
-      Offset(size.width, cornerRadius),
-      radius: const Radius.circular(cornerRadius),
-    );
-    path.lineTo(size.width, lineLength);
-
-    path.moveTo(size.width, size.height - lineLength);
-    path.lineTo(size.width, size.height - cornerRadius);
-    path.arcToPoint(
-      Offset(size.width - cornerRadius, size.height),
-      radius: const Radius.circular(cornerRadius),
-    );
-    path.lineTo(size.width - lineLength, size.height);
-
-    path.moveTo(lineLength, size.height);
-    path.lineTo(cornerRadius, size.height);
-    path.arcToPoint(
-      Offset(0, size.height - cornerRadius),
-      radius: const Radius.circular(cornerRadius),
-    );
-    path.lineTo(0, size.height - lineLength);
-
-    canvas.drawPath(path, paint);
+    canvas.drawPath(p, paint);
   }
 
   @override
