@@ -8,6 +8,7 @@ import 'package:intl/date_symbol_data_local.dart';
 import 'package:camera/camera.dart';
 import 'scan_video.dart';
 import 'history_page.dart';
+import '../../main.dart';
 
 class EcoRewardPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -18,7 +19,7 @@ class EcoRewardPage extends StatefulWidget {
 }
 
 class _EcoRewardPageState extends State<EcoRewardPage>
-    with SingleTickerProviderStateMixin {
+    with RouteAware, SingleTickerProviderStateMixin {
   String _formattedDate = '';
 
   // ====== STATE ======
@@ -48,6 +49,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   Timer? _toastTimer;
   String _toastMsg = '';
 
+  late final RealtimeChannel _channel;
+
   @override
   void initState() {
     super.initState();
@@ -67,14 +70,49 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       });
 
     unawaited(_fetchData());
+
+    final client = Supabase.instance.client;
+
+    // subscribe ke tabel mission_history
+    _channel = client.channel('public:mission_history')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'mission_history',
+        callback: (payload) {
+          _fetchData(); // setiap ada perubahan di supabase, sync ulang tombol
+        },
+      )
+      .subscribe();
+
+    _fetchData(); // load awal
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
+
+  @override
+  void didPopNext() {
+    // refresh otomatis ketika user balik dari halaman lain
+    _fetchData();
   }
 
   @override
   void dispose() {
+    routeObserver.unsubscribe(this);
+
     _toastTimer?.cancel();
     _toastCtl.dispose();
     _toastEntry?.remove();
     _toastEntry = null;
+
+    _channel.unsubscribe();
     super.dispose();
   }
 

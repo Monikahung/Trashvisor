@@ -41,6 +41,8 @@ const Color kTrashvisorTitleColor = Color(0xFF2C5E2B);
 /// ========================================
 /// Inisialisasi environment (.env), Supabase, dan jalankan aplikasi.
 /// Pastikan .env sudah berisi SUPABASE_URL dan SUPABASE_ANON_KEY.
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -68,6 +70,7 @@ class MyApp extends StatelessWidget {
       title: 'Trashvisor App',
       debugShowCheckedModeBanner: false,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
+      navigatorObservers: [routeObserver],
       theme: ThemeData(
         // Catatan: ubah seedColor atau gunakan ThemeData.light/dark sesuai kebutuhan.
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
