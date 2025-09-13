@@ -18,12 +18,7 @@ void _showCustomSnackbar(String message, Color color, IconData icon) {
         children: [
           Icon(icon, color: Colors.white),
           const SizedBox(width: 10),
-          Expanded(
-            child: Text(
-              message,
-              style: const TextStyle(color: Colors.white),
-            ),
-          ),
+          Expanded(child: Text(message, style: const TextStyle(color: Colors.white))),
         ],
       ),
       backgroundColor: color,
@@ -42,8 +37,7 @@ Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
   String missionType,
 ) async {
   final dio = Dio();
-  const url =
-      'https://monikahung-git-detection-video-throw-garbage.hf.space/validate';
+  const url = 'https://monikahung-git-detection-video-throw-garbage.hf.space/validate';
 
   try {
     final formData = FormData.fromMap({
@@ -73,7 +67,8 @@ Future<Map<String, dynamic>?> _sendVideoToHuggingFace(
 class ScanVideo extends StatefulWidget {
   final List<CameraDescription> cameras;
   final String missionType;
-  final String missionKey; // agar status “xxx:<key>”
+  final String missionKey;                  // agar status “xxx:<key>”
+  final String? reuseRowId;                 // NEW: id row 'failed' yang mau di-reuse (boleh null)
   final void Function(bool isValid) onValidationComplete;
 
   const ScanVideo({
@@ -82,6 +77,7 @@ class ScanVideo extends StatefulWidget {
     required this.missionType,
     required this.missionKey,
     required this.onValidationComplete,
+    this.reuseRowId,
   });
 
   @override
@@ -96,6 +92,9 @@ class _ScanVideoState extends State<ScanVideo> {
   bool _isLoading = false;
   Timer? _timer;
   int _secondsRecorded = 0;
+
+  // NEW: simpan id baris yang lagi dipakai (reused / inserted)
+  String? _rowIdInUse;
 
   @override
   void initState() {
@@ -148,10 +147,8 @@ class _ScanVideoState extends State<ScanVideo> {
 
     final newCamera =
         (_controller!.description.lensDirection == CameraLensDirection.front)
-            ? widget.cameras.firstWhere(
-                (c) => c.lensDirection == CameraLensDirection.back)
-            : widget.cameras.firstWhere(
-                (c) => c.lensDirection == CameraLensDirection.front);
+            ? widget.cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.back)
+            : widget.cameras.firstWhere((c) => c.lensDirection == CameraLensDirection.front);
 
     await _controller!.dispose();
     _controller = null;
@@ -200,50 +197,87 @@ class _ScanVideoState extends State<ScanVideo> {
         _isRecording = false;
         _isLoading = false;
       });
-      ScaffoldMessenger.of(context)
-          .showSnackBar(SnackBar(content: Text('Gagal mulai rekam: $e')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Gagal mulai rekam: $e')),
+      );
     }
   }
 
-  // Tulis `processing:<key>` setelah rekaman berhenti (mulai upload)
+  /// NEW: tulis `processing:<key>` dengan REUSE row gagal jika ada.
   Future<void> _markProcessing() async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
-    final todayStr = _yyyyMmDd(DateTime.now());
 
-    await supabase.from('mission_history').upsert({
-      'user_id': user.id,
-      'mission_date': todayStr,
-      'status': 'processing:${widget.missionKey}',
-      'created_at': DateTime.now().toUtc().toIso8601String(),
-    });
+    final todayStr = _yyyyMmDd(DateTime.now());
+    final processing = 'processing:${widget.missionKey}';
+    final nowIso = DateTime.now().toUtc().toIso8601String();
+
+    try {
+      // Kalau dikasih reuseRowId -> update row itu jadi 'processing'
+      if (widget.reuseRowId != null && widget.reuseRowId!.isNotEmpty) {
+        final updated = await supabase
+            .from('mission_history')
+            .update({'status': processing, 'created_at': nowIso})
+            .eq('id', widget.reuseRowId!) // non-null !
+            .select('id')
+            .maybeSingle();
+
+        if (updated != null) {
+          _rowIdInUse = (updated['id'] ?? widget.reuseRowId!).toString();
+          return;
+        }
+        // Jika entah kenapa update gagal, fallback ke insert di bawah.
+      }
+
+      // Insert baris baru processing
+      final inserted = await supabase
+          .from('mission_history')
+          .insert({
+            'user_id': user.id,
+            'mission_date': todayStr,
+            'status': processing,
+            'created_at': nowIso,
+          })
+          .select('id')
+          .maybeSingle();
+
+      _rowIdInUse = (inserted?['id'] ?? '').toString();
+    } catch (e) {
+      debugPrint('markProcessing error: $e');
+    }
   }
 
-  // Transisi processing -> completed/failed
+  /// NEW: transisi processing → completed/failed di ROW YANG SAMA bila _rowIdInUse ada.
   Future<void> _transitionProcessing({required bool success}) async {
     final user = supabase.auth.currentUser;
     if (user == null) return;
+
     final todayStr = _yyyyMmDd(DateTime.now());
-    final toStatus =
-        success ? 'completed:${widget.missionKey}' : 'failed:${widget.missionKey}';
+    final toStatus = success ? 'completed:${widget.missionKey}' : 'failed:${widget.missionKey}';
 
-    final updated = await supabase
-        .from('mission_history')
-        .update({'status': toStatus})
-        .match({
-          'user_id': user.id,
-          'mission_date': todayStr,
-          'status': 'processing:${widget.missionKey}',
-        })
-        .select('id');
+    try {
+      if (_rowIdInUse != null && _rowIdInUse!.isNotEmpty) {
+        await supabase
+            .from('mission_history')
+            .update({'status': toStatus})
+            .eq('id', _rowIdInUse!) // non-null !
+            .select('id')
+            .maybeSingle();
+        return;
+      }
 
-    if (!(updated is List && updated.isNotEmpty)) {
-      await supabase.from('mission_history').insert({
-        'user_id': user.id,
-        'mission_date': todayStr,
-        'status': toStatus,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      });
+      // Fallback lama (jaga-jaga)
+      await supabase
+          .from('mission_history')
+          .update({'status': toStatus})
+          .match({
+            'user_id': user.id,
+            'mission_date': todayStr,
+            'status': 'processing:${widget.missionKey}',
+          })
+          .select('id');
+    } catch (e) {
+      debugPrint('transitionProcessing error: $e');
     }
   }
 
@@ -261,16 +295,16 @@ class _ScanVideoState extends State<ScanVideo> {
     try {
       final XFile video = await _controller!.stopVideoRecording();
 
-      // 1) tandai processing
+      // 1) tandai processing (REUSE row bila ada)
       await _markProcessing();
 
-      // 2) info & KEMBALI -> kirim `true` supaya parent ubah tombol jadi "Proses"
+      // 2) Snackbar info & kembali ke parent → parent ubah tombol ke "Proses"
       _showCustomSnackbar(
         'Berhasil merekam. Validasi sedang diproses...',
         Colors.blue,
         Icons.cloud_upload_outlined,
       );
-      Navigator.pop(context, true); // >>> UBAH: return true
+      Navigator.pop(context, true);
 
       // 3) Upload + validasi (background)
       unawaited(
@@ -290,15 +324,15 @@ class _ScanVideoState extends State<ScanVideo> {
           widget.onValidationComplete(isValid);
         }).catchError((e) async {
           await _transitionProcessing(success: false);
-          _showCustomSnackbar(
-              'Terjadi error saat validasi.', Colors.red, Icons.error_outline);
+          _showCustomSnackbar('Terjadi error saat validasi.', Colors.red, Icons.error_outline);
           widget.onValidationComplete(false);
         }),
       );
     } catch (e) {
       if (mounted) {
-        rootScaffoldMessengerKey.currentState
-            ?.showSnackBar(SnackBar(content: Text('Gagal stop rekam: $e')));
+        rootScaffoldMessengerKey.currentState?.showSnackBar(
+          SnackBar(content: Text('Gagal stop rekam: $e')),
+        );
       }
     }
   }
@@ -329,44 +363,30 @@ class _ScanVideoState extends State<ScanVideo> {
               ),
             if (_isRecording)
               Positioned(
-                top: 100,
-                left: 0,
-                right: 0,
+                top: 100, left: 0, right: 0,
                 child: Center(
                   child: Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     decoration: BoxDecoration(
                       color: Colors.red.withOpacity(0.7),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: const Text(
                       'Merekam maksimal 8 detik',
-                      style: TextStyle(
-                          color: Colors.white, fontWeight: FontWeight.bold),
+                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
               ),
             if (_isRecording)
               Positioned(
-                bottom: h * 0.35,
-                left: 0,
-                right: 0,
+                bottom: h * 0.35, left: 0, right: 0,
                 child: Center(
                   child: Text(
                     '$_secondsRecorded',
                     style: const TextStyle(
-                      fontFamily: 'Nunito',
-                      fontSize: 30,
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      shadows: [
-                        Shadow(
-                            color: Colors.black54,
-                            blurRadius: 2,
-                            offset: Offset(1, 1))
-                      ],
+                      fontFamily: 'Nunito', fontSize: 30, color: Colors.white, fontWeight: FontWeight.bold,
+                      shadows: [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))],
                     ),
                   ),
                 ),
@@ -410,13 +430,10 @@ class _ScanVideoState extends State<ScanVideo> {
                 padding: EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                 child: Row(
                   children: [
-                    Text(
-                      'Panduan',
+                    Text('Panduan',
                       style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 14,
-                        color: AppColors.fernGreen,
-                        fontWeight: FontWeight.bold,
+                        fontFamily: 'Nunito', fontSize: 14,
+                        color: AppColors.fernGreen, fontWeight: FontWeight.bold,
                       ),
                     ),
                     SizedBox(width: 8),
@@ -439,19 +456,14 @@ class _ScanVideoState extends State<ScanVideo> {
       alignment: Alignment.center,
       children: [
         CameraPreview(_controller!),
-        CustomPaint(
-            size: Size(w * 0.8, h * 0.5), painter: ViewfinderPainter()),
+        CustomPaint(size: Size(w * 0.8, h * 0.5), painter: ViewfinderPainter()),
         const Positioned(
           bottom: 20,
           child: Text(
             'Arahkan kamera saat membuang sampah',
             style: TextStyle(
-              fontFamily: 'Roboto',
-              fontSize: 14,
-              color: Colors.white,
-              shadows: [
-                Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))
-              ],
+              fontFamily: 'Roboto', fontSize: 14, color: Colors.white,
+              shadows: [Shadow(color: Colors.black54, blurRadius: 2, offset: Offset(1, 1))],
             ),
           ),
         ),
@@ -467,25 +479,17 @@ class _ScanVideoState extends State<ScanVideo> {
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           IconButton(
-            icon: Icon(
-                _flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
-                color: AppColors.fernGreen,
-                size: 30),
+            icon: Icon(_flashMode == FlashMode.off ? Icons.flash_off : Icons.flash_on,
+              color: AppColors.fernGreen, size: 30),
             onPressed: _toggleFlash,
           ),
           Container(
-            width: 70,
-            height: 70,
-            decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(color: AppColors.fernGreen, width: 4)),
+            width: 70, height: 70,
+            decoration: BoxDecoration(shape: BoxShape.circle, border: Border.all(color: AppColors.fernGreen, width: 4)),
             child: Center(
               child: Container(
-                width: 55,
-                height: 55,
-                decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: _isRecording ? Colors.red : AppColors.fernGreen),
+                width: 55, height: 55,
+                decoration: BoxDecoration(shape: BoxShape.circle, color: _isRecording ? Colors.red : AppColors.fernGreen),
                 child: InkWell(
                   onTap: _isRecording ? _stopVideoRecording : _startVideoRecording,
                   borderRadius: BorderRadius.circular(55 / 2),
@@ -494,8 +498,7 @@ class _ScanVideoState extends State<ScanVideo> {
             ),
           ),
           IconButton(
-            icon: const Icon(Icons.cameraswitch,
-                color: AppColors.fernGreen, size: 30),
+            icon: const Icon(Icons.cameraswitch, color: AppColors.fernGreen, size: 30),
             onPressed: _toggleCamera,
           ),
         ],
@@ -516,27 +519,10 @@ class ViewfinderPainter extends CustomPainter {
     const l = 50.0;
     final p = Path();
 
-    p.moveTo(0, l);
-    p.lineTo(0, r);
-    p.arcToPoint(const Offset(r, 0), radius: const Radius.circular(r));
-    p.lineTo(l, 0);
-
-    p.moveTo(size.width - l, 0);
-    p.lineTo(size.width - r, 0);
-    p.arcToPoint(Offset(size.width, r), radius: const Radius.circular(r));
-    p.lineTo(size.width, l);
-
-    p.moveTo(size.width, size.height - l);
-    p.lineTo(size.width, size.height - r);
-    p.arcToPoint(Offset(size.width - r, size.height),
-        radius: const Radius.circular(r));
-    p.lineTo(size.width - l, size.height);
-
-    p.moveTo(l, size.height);
-    p.lineTo(r, size.height);
-    p.arcToPoint(Offset(0, size.height - r),
-        radius: const Radius.circular(r));
-    p.lineTo(0, size.height - l);
+    p.moveTo(0, l); p.lineTo(0, r); p.arcToPoint(const Offset(r, 0), radius: const Radius.circular(r)); p.lineTo(l, 0);
+    p.moveTo(size.width - l, 0); p.lineTo(size.width - r, 0); p.arcToPoint(Offset(size.width, r), radius: const Radius.circular(r)); p.lineTo(size.width, l);
+    p.moveTo(size.width, size.height - l); p.lineTo(size.width, size.height - r); p.arcToPoint(Offset(size.width - r, size.height), radius: const Radius.circular(r)); p.lineTo(size.width - l, size.height);
+    p.moveTo(l, size.height); p.lineTo(r, size.height); p.arcToPoint(Offset(0, size.height - r), radius: const Radius.circular(r)); p.lineTo(0, size.height - l);
 
     canvas.drawPath(p, paint);
   }

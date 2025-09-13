@@ -224,7 +224,7 @@ class _ActionButtonsSection extends StatelessWidget {
                 if (CapsuleGlobal.searchText.trim().isEmpty) {
                   showTopToast(
                     context,
-                    message: 'Tulis dulu jenis sampah di search kolom atas.',
+                    message: 'Tulis dulu jenis sampah di kolom atas.',
                     backgroundColor: const Color(0xFFEA4335),
                     icon: Icons.error_outline,
                     extraTop: 44,
