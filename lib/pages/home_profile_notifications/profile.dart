@@ -1,10 +1,17 @@
-import 'dart:async'; // (NEW) untuk Timer banner
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:trashvisor/core/colors.dart';
-// (NEW) untuk logout & tarik data user
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:camera/camera.dart';
 import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage;
+
+// >>> UBAH: daftar key misi scan (dipakai untuk hitung 5 tugas/hari)
+const Set<String> _scanKeys = {
+  'record_paper',
+  'record_leaves',
+  'record_plastic_bottle',
+  'record_can',
+};
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -15,35 +22,51 @@ class ProfilePage extends StatefulWidget {
 
 class _ProfilePageState extends State<ProfilePage>
     with SingleTickerProviderStateMixin {
-  // ------------------------ (NEW) Top-banner (success) ------------------------
+  // ------------------------ Top-banner (success) ------------------------
   late final AnimationController _bannerCtl;
   OverlayEntry? _bannerEntry;
   Timer? _bannerTimer;
   String _bannerMessage = '';
 
-  // (PERBAIKAN) Definisikan ambang batas level
+  // Ambang batas level
   final List<Map<String, dynamic>> _levelThresholds = [
-    {'name': 'Bronze', 'min_score': 0, 'max_score': 1000, 'color': Colors.brown.shade400},
-    {'name': 'Silver', 'min_score': 1000, 'max_score': 3000, 'color': Colors.grey.shade500},
-    {'name': 'Gold', 'min_score': 3000, 'max_score': 6000, 'color': Colors.amber.shade700},
+    {
+      'name': 'Bronze',
+      'min_score': 0,
+      'max_score': 1000,
+      'color': Colors.brown,
+    },
+    {
+      'name': 'Silver',
+      'min_score': 1000,
+      'max_score': 3000,
+      'color': Colors.grey,
+    },
+    {
+      'name': 'Gold',
+      'min_score': 3000,
+      'max_score': 6000,
+      'color': Colors.amber,
+    },
   ];
 
-  // (NEW) cache kecil untuk aktivitas minggu ini
+  // cache kecil untuk aktivitas minggu ini
   late final Future<List<_ProfileDayState>> _weeklyActivity;
 
   @override
   void initState() {
     super.initState();
-    _bannerCtl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 220),
-      reverseDuration: const Duration(milliseconds: 180),
-    )..addStatusListener((status) {
-        if (status == AnimationStatus.dismissed) {
-          _bannerEntry?.remove();
-          _bannerEntry = null;
-        }
-      });
+    _bannerCtl =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 220),
+          reverseDuration: const Duration(milliseconds: 180),
+        )..addStatusListener((status) {
+          if (status == AnimationStatus.dismissed) {
+            _bannerEntry?.remove();
+            _bannerEntry = null;
+          }
+        });
 
     _weeklyActivity = _loadWeeklyActivity();
   }
@@ -57,7 +80,7 @@ class _ProfilePageState extends State<ProfilePage>
     super.dispose();
   }
 
-  // (NEW) Menampilkan top-banner hijau di atas layar (gaya sama seperti login.dart)
+  // Top banner hijau (gaya sama dg login)
   void _showTopBanner(
     String message, {
     Color bg = AppColors.fernGreen,
@@ -77,16 +100,17 @@ class _ProfilePageState extends State<ProfilePage>
           left: side,
           right: side,
           child: SlideTransition(
-            position: Tween<Offset>(
-              begin: const Offset(0, -0.2),
-              end: Offset.zero,
-            ).animate(
-              CurvedAnimation(
-                parent: _bannerCtl,
-                curve: Curves.easeOutCubic,
-                reverseCurve: Curves.easeInCubic,
-              ),
-            ),
+            position:
+                Tween<Offset>(
+                  begin: const Offset(0, -0.2),
+                  end: Offset.zero,
+                ).animate(
+                  CurvedAnimation(
+                    parent: _bannerCtl,
+                    curve: Curves.easeOutCubic,
+                    reverseCurve: Curves.easeInCubic,
+                  ),
+                ),
             child: FadeTransition(
               opacity: _bannerCtl,
               child: Material(
@@ -94,18 +118,27 @@ class _ProfilePageState extends State<ProfilePage>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  // >>> UBAH: Padding harus pakai named parameter `padding`
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 12,
+                  ),
                   child: Row(
+                    // HAPUS "const" di sini
                     children: [
-                      const Icon(Icons.check_circle_outline,
-                          color: Colors.white, size: 20),
+                      const Icon(
+                        Icons.check_circle_outline,
+                        color: Colors.white,
+                        size: 20,
+                      ),
                       const SizedBox(width: 10),
                       Expanded(
                         child: Text(
-                          _bannerMessage,
-                          style: TextStyle(
-                            color: fg,
+                          _bannerMessage, // <-- pakai variabelnya
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            color: Colors.white,
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
                           ),
@@ -129,9 +162,8 @@ class _ProfilePageState extends State<ProfilePage>
       _bannerCtl.reverse();
     });
   }
-  // ---------------------------------------------------------------------------
 
-  // (NEW) Helper: ambil info profil (nama, email & score)
+  // Ambil info profil
   Future<Map<String, dynamic>> _loadProfileInfo() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
@@ -143,7 +175,7 @@ class _ProfilePageState extends State<ProfilePage>
         'email': '',
         'score': 0,
         'level_name': 'Bronze',
-        'level_color': Colors.brown.shade400,
+        'level_color': Colors.brown,
       };
     }
 
@@ -163,7 +195,6 @@ class _ProfilePageState extends State<ProfilePage>
       }
     } catch (_) {}
 
-    // metadata fallback
     final meta = user.userMetadata;
     if ((fullName == null || fullName.isEmpty) && meta != null) {
       for (final key in ['full_name', 'name', 'nama']) {
@@ -179,17 +210,26 @@ class _ProfilePageState extends State<ProfilePage>
     fullName ??= email.split('@').first;
 
     String titleTwoWords(String s) {
-      final parts = s.split(RegExp(r'[\s._-]+')).where((w) => w.isNotEmpty).toList();
+      final parts = s
+          .split(RegExp(r'[\s._-]+'))
+          .where((w) => w.isNotEmpty)
+          .toList();
       if (parts.isEmpty) return 'Pengguna';
-      final chosen = parts.take(2).map((w) {
-        final lower = w.toLowerCase();
-        return lower[0].toUpperCase() + lower.substring(1);
-      }).join(' ');
+      final chosen = parts
+          .take(2)
+          .map((w) {
+            final lower = w.toLowerCase();
+            return lower[0].toUpperCase() + lower.substring(1);
+          })
+          .join(' ');
       return chosen;
     }
 
     String titleFirstWord(String s) {
-      final parts = s.split(RegExp(r'[\s._-]+')).where((w) => w.isNotEmpty).toList();
+      final parts = s
+          .split(RegExp(r'[\s._-]+'))
+          .where((w) => w.isNotEmpty)
+          .toList();
       if (parts.isEmpty) return 'Pengguna';
       final lower = parts.first.toLowerCase();
       return lower[0].toUpperCase() + lower.substring(1);
@@ -197,7 +237,9 @@ class _ProfilePageState extends State<ProfilePage>
 
     final int userScore = score ?? 0;
     final currentLevel = _levelThresholds.firstWhere(
-      (level) => userScore >= (level['min_score'] as int) && userScore < (level['max_score'] as int),
+      (level) =>
+          userScore >= (level['min_score'] as int) &&
+          userScore < (level['max_score'] as int),
       orElse: () => _levelThresholds.last,
     );
 
@@ -211,7 +253,7 @@ class _ProfilePageState extends State<ProfilePage>
     };
   }
 
-  // (NEW) Helper logout: signOut Supabase lalu arahkan ke LoginPage
+  // Logout
   Future<void> _logout(BuildContext context) async {
     final nav = Navigator.of(context);
     final info = await _loadProfileInfo();
@@ -234,32 +276,31 @@ class _ProfilePageState extends State<ProfilePage>
 
   // ===================== AKTIVITAS MINGGUAN (DATA) =====================
 
-  static bool _isSuccessStatus(String s) {
-    final x = s.toLowerCase();
-    return x.contains('done') ||
-        x.contains('completed') ||
-        x.contains('success') ||
-        x.contains('selesai') ||
-        x.contains('finish');
+  // >>> UBAH: definisi “sukses per key per hari”
+  // - checkin: cukup status `completed:` atau `claimed:`
+  // - misi scan: dianggap sukses hanya jika `claimed:` (bukan `completed:`)
+  static bool _isSuccessForKey(String state, String key) {
+    final s = state.toLowerCase();
+    if (key == 'checkin') {
+      return s.startsWith('completed') || s.startsWith('claimed');
+    }
+    if (_scanKeys.contains(key)) {
+      return s.startsWith('claimed'); // harus klaim dulu
+    }
+    return false;
   }
 
   Future<List<_ProfileDayState>> _loadWeeklyActivity() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
     final today = _onlyDate(DateTime.now());
-    final monday = _mondayOf(today); // Senin minggu ini
+    final monday = _mondayOf(today);
     final sunday = monday.add(const Duration(days: 6));
 
-    // default kalau belum login: semua abu-abu, tidak ada centang/silang
     if (user == null) {
-      return _buildWeekSkeleton(
-        createdAt: today,
-        today: today,
-        monday: monday,
-      );
+      return _buildWeekSkeleton(createdAt: today, today: today, monday: monday);
     }
 
-    // cari tanggal dibuatnya akun
     DateTime createdAt = today;
     try {
       final prof = await client
@@ -273,9 +314,10 @@ class _ProfilePageState extends State<ProfilePage>
       }
     } catch (_) {}
 
-    // (PERBAIKAN) ambil mission_history minggu ini: tandai "ada aktivitas" & "sukses"
-    final Map<DateTime, bool> successPerDay = {};
+    // >>> UBAH: hitung per tanggal -> set “keys sukses” & ada aktivitas
+    final Map<DateTime, Set<String>> successKeysPerDay = {};
     final Map<DateTime, bool> activityPerDay = {};
+
     try {
       final rows = await client
           .from('mission_history')
@@ -286,33 +328,55 @@ class _ProfilePageState extends State<ProfilePage>
 
       for (final r in rows as List) {
         final dStr = r['mission_date'];
-        if (dStr == null) continue;
+        final st = (r['status'] ?? '').toString();
+        if (dStr == null || st.isEmpty) continue;
         final d = _onlyDate(DateTime.parse(dStr.toString()));
-        final ok = _isSuccessStatus((r['status'] ?? '').toString());
-        activityPerDay[d] = true;                      // ada entry apapun = ada aktivitas
-        successPerDay[d] = (successPerDay[d] ?? false) || ok; // OR untuk sukses
+        activityPerDay[d] = true;
+
+        // parse "state:key"
+        if (st.contains(':')) {
+          final i = st.indexOf(':');
+          final state = st.substring(0, i);
+          final key = st.substring(i + 1);
+          if (_isSuccessForKey(state, key)) {
+            (successKeysPerDay[d] ??= <String>{}).add(key);
+          }
+        }
       }
     } catch (_) {}
 
-    // rakit 7 hari (created_at..today eligible)
-    const labels = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+    // Rakit 7 hari → completed = 5 key sukses (checkin + 4 scan)
+    const labels = [
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
+    ];
     final List<_ProfileDayState> out = [];
     for (int i = 0; i < 7; i++) {
       final d = monday.add(Duration(days: i));
       final beforeCreated = d.isBefore(createdAt);
       final inFuture = d.isAfter(today);
-      final isCurrent = d.year == today.year && d.month == today.month && d.day == today.day;
+      final isCurrent =
+          d.year == today.year && d.month == today.month && d.day == today.day;
 
       final eligible = !(beforeCreated || inFuture);
+      final succCount = (successKeysPerDay[d] ?? const <String>{}).length;
+      final isCompleted = eligible && succCount >= 5;
 
-      out.add(_ProfileDayState(
-        label: labels[i],
-        date: d,
-        eligible: eligible,
-        completed: eligible && (successPerDay[d] ?? false),
-        hasActivity: eligible && (activityPerDay[d] ?? false), // (NEW)
-        isCurrent: isCurrent, // (NEW)
-      ));
+      out.add(
+        _ProfileDayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: isCompleted,
+          hasActivity: eligible && (activityPerDay[d] ?? false),
+          isCurrent: isCurrent,
+        ),
+      );
     }
     return out;
   }
@@ -322,22 +386,33 @@ class _ProfilePageState extends State<ProfilePage>
     required DateTime today,
     required DateTime monday,
   }) {
-    const labels = ['Senin','Selasa','Rabu','Kamis','Jumat','Sabtu','Minggu'];
+    const labels = [
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
+    ];
     final List<_ProfileDayState> out = [];
     for (int i = 0; i < 7; i++) {
       final d = DateTime(monday.year, monday.month, monday.day + i);
       final beforeCreated = d.isBefore(createdAt);
       final inFuture = d.isAfter(today);
       final eligible = !(beforeCreated || inFuture);
-      final isCurrent = d.year == today.year && d.month == today.month && d.day == today.day;
-      out.add(_ProfileDayState(
-        label: labels[i],
-        date: d,
-        eligible: eligible,
-        completed: false,
-        hasActivity: false, // (NEW)
-        isCurrent: isCurrent, // (NEW)
-      ));
+      final isCurrent =
+          d.year == today.year && d.month == today.month && d.day == today.day;
+      out.add(
+        _ProfileDayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: false,
+          hasActivity: false,
+          isCurrent: isCurrent,
+        ),
+      );
     }
     return out;
   }
@@ -347,8 +422,7 @@ class _ProfilePageState extends State<ProfilePage>
   DateTime _onlyDate(DateTime d) => DateTime(d.year, d.month, d.day);
 
   DateTime _mondayOf(DateTime d) {
-    // Mon=1 ... Sun=7
-    final wd = d.weekday;
+    final wd = d.weekday; // Mon=1 ... Sun=7
     return _onlyDate(d.subtract(Duration(days: wd - 1)));
   }
 
@@ -377,7 +451,7 @@ class _ProfilePageState extends State<ProfilePage>
             children: [
               _buildTombolAtas(context),
               const SizedBox(height: 150),
-              _buildKartuKonten(context)
+              _buildKartuKonten(context),
             ],
           ),
         ),
@@ -385,10 +459,11 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  // --- Widget Pembantu untuk Keterbacaan yang Lebih Baik ---
+  // --- Widget Pembantu ---
 
   Widget _buildTombolAtas(BuildContext context) {
     return Padding(
+      // >>> UBAH: Padding pakai named parameter
       padding: const EdgeInsets.fromLTRB(16, 40, 16, 0),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -407,7 +482,11 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildTombolKeluar({String? teks, required IconData ikon, required VoidCallback onPressed}) {
+  Widget _buildTombolKeluar({
+    String? teks,
+    required IconData ikon,
+    required VoidCallback onPressed,
+  }) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
@@ -425,7 +504,7 @@ class _ProfilePageState extends State<ProfilePage>
                 padding: const EdgeInsets.only(left: 8),
                 child: Text(
                   teks,
-                  style: TextStyle(
+                  style: const TextStyle(
                     color: AppColors.whiteSmoke,
                     fontFamily: 'Nunito',
                     fontSize: 14,
@@ -439,7 +518,10 @@ class _ProfilePageState extends State<ProfilePage>
     );
   }
 
-  Widget _buildTombolKembali({required IconData ikon, required VoidCallback onPressed}) {
+  Widget _buildTombolKembali({
+    required IconData ikon,
+    required VoidCallback onPressed,
+  }) {
     return Container(
       width: 50,
       height: 50,
@@ -467,6 +549,7 @@ class _ProfilePageState extends State<ProfilePage>
         ),
       ),
       child: Padding(
+        // >>> UBAH: Padding pakai named parameter
         padding: const EdgeInsets.all(20),
         child: Column(
           children: [
@@ -490,7 +573,7 @@ class _ProfilePageState extends State<ProfilePage>
         final email = snap.data?['email'] ?? '';
         final score = snap.data?['score'] as int? ?? 0;
         final levelName = snap.data?['level_name'] ?? 'Bronze';
-        final levelColor = snap.data?['level_color'] ?? Colors.brown.shade400;
+        final levelColor = snap.data?['level_color'] ?? Colors.brown;
 
         return Row(
           children: [
@@ -498,7 +581,7 @@ class _ProfilePageState extends State<ProfilePage>
               height: 80,
               width: 80,
               decoration: BoxDecoration(
-                color: AppColors.fernGreen.withAlpha((255 * 0.2).round()),
+                color: AppColors.fernGreen.withOpacity(0.2),
                 shape: BoxShape.circle,
                 border: Border.all(color: AppColors.fernGreen, width: 2),
               ),
@@ -548,27 +631,20 @@ class _ProfilePageState extends State<ProfilePage>
   }
 
   Widget _buildLevelContainer(String levelName, Color levelColor) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 0, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.transparent,
-        borderRadius: BorderRadius.circular(15),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.stars, color: levelColor, size: 30),
-          const SizedBox(width: 4),
-          Text(
-            'Level $levelName',
-            style: TextStyle(
-              fontSize: 14,
-              fontFamily: 'Nunito',
-              fontWeight: FontWeight.bold,
-              color: levelColor,
-            ),
+    return Row(
+      children: [
+        Icon(Icons.stars, color: levelColor, size: 30),
+        const SizedBox(width: 4),
+        Text(
+          'Level $levelName',
+          style: TextStyle(
+            fontSize: 14,
+            fontFamily: 'Nunito',
+            fontWeight: FontWeight.bold,
+            color: levelColor,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 
@@ -589,7 +665,11 @@ class _ProfilePageState extends State<ProfilePage>
               color: Colors.amberAccent,
               shape: BoxShape.circle,
             ),
-            child: const Icon(Icons.monetization_on, color: Colors.amber, size: 28),
+            child: const Icon(
+              Icons.monetization_on,
+              color: Colors.amber,
+              size: 28,
+            ),
           ),
           const SizedBox(width: 8),
           Text(
@@ -617,7 +697,7 @@ class _ProfilePageState extends State<ProfilePage>
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: AppColors.fernGreen.withAlpha((255 * 1.0).round()),
+        color: AppColors.fernGreen,
         borderRadius: BorderRadius.circular(15),
       ),
       child: Column(
@@ -645,7 +725,6 @@ class _ProfilePageState extends State<ProfilePage>
             ],
           ),
           const SizedBox(height: 16),
-
           FutureBuilder<List<_ProfileDayState>>(
             future: _weeklyActivity,
             builder: (context, snap) {
@@ -670,8 +749,8 @@ class _ProfilePageState extends State<ProfilePage>
                       _buildIkonStatusProfile(
                         eligible: d.eligible,
                         completed: d.completed,
-                        hasActivity: d.hasActivity, // (NEW)
-                        isCurrent: d.isCurrent,     // (NEW)
+                        hasActivity: d.hasActivity,
+                        isCurrent: d.isCurrent,
                       ),
                       const SizedBox(height: 4),
                       Text(
@@ -697,12 +776,10 @@ class _ProfilePageState extends State<ProfilePage>
   Widget _buildIkonStatusProfile({
     required bool eligible,
     required bool completed,
-    required bool hasActivity, // (NEW)
-    required bool isCurrent,   // (NEW)
+    required bool hasActivity,
+    required bool isCurrent,
   }) {
-    // eligible = hari ini / hari yang sudah lewat sejak akun dibuat
     if (!eligible) {
-      // abu-abu kosong
       return Container(
         width: 35,
         height: 35,
@@ -713,22 +790,7 @@ class _ProfilePageState extends State<ProfilePage>
       );
     }
 
-    // (NEW) Hari ini tapi belum selesai -> indikator abu-abu (sedang berlangsung)
-    if (isCurrent && !completed) {
-      return Container(
-        width: 35,
-        height: 35,
-        decoration: const BoxDecoration(
-          color: AppColors.whiteSmoke,
-          shape: BoxShape.circle,
-        ),
-        child: const Icon(Icons.schedule, color: Colors.grey, size: 22),
-      );
-    }
-
-    // eligible (hari lampau atau hari ini yg sudah selesai)
     if (completed) {
-      // selesai -> centang hijau
       return Container(
         width: 35,
         height: 35,
@@ -740,20 +802,7 @@ class _ProfilePageState extends State<ProfilePage>
       );
     }
 
-    if (hasActivity) {
-      // (NEW) ada aktivitas tapi belum sukses -> tampilkan ikon "progress" kuning (beda layout dari Reward)
-      return Container(
-        width: 35,
-        height: 35,
-        decoration: const BoxDecoration(
-          color: AppColors.whiteSmoke,
-          shape: BoxShape.circle,
-        ),
-        child: Icon(Icons.radio_button_checked, color: Colors.amber.shade700, size: 26),
-      );
-    }
-
-    // benar-benar kosong -> X merah
+    // tidak completed -> silang merah (sesuai permintaan)
     return Container(
       width: 35,
       height: 35,
@@ -770,17 +819,17 @@ class _ProfilePageState extends State<ProfilePage>
 class _ProfileDayState {
   final String label;
   final DateTime date;
-  final bool eligible;    // false = sebelum created_at ATAU sesudah hari ini (future)
-  final bool completed;   // true = status sukses di mission_history untuk hari tsb
-  final bool hasActivity; // (NEW) true = ada baris mission_history apapun
-  final bool isCurrent;   // (NEW) true = hari ini
+  final bool eligible;
+  final bool completed;
+  final bool hasActivity;
+  final bool isCurrent;
 
   _ProfileDayState({
     required this.label,
     required this.date,
     required this.eligible,
     required this.completed,
-    required this.hasActivity, // (NEW)
-    required this.isCurrent,   // (NEW)
+    required this.hasActivity,
+    required this.isCurrent,
   });
 }

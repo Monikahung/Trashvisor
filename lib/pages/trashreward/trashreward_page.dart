@@ -1,3 +1,4 @@
+// trashreward_page.dart
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -7,9 +8,10 @@ import 'package:intl/intl.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:camera/camera.dart';
 import 'scan_video.dart';
+import 'history_page.dart';
 
 class EcoRewardPage extends StatefulWidget {
-  final List<CameraDescription> cameras; // Tambahkan parameter cameras
+  final List<CameraDescription> cameras;
   const EcoRewardPage({super.key, required this.cameras});
 
   @override
@@ -20,7 +22,63 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     with SingleTickerProviderStateMixin {
   String _formattedDate = '';
 
-  // Method to reload profile and daily row data, and update UI
+  // ========== STATE ==========
+  final Map<String, bool> _processingMissions = {};
+  final Set<String> _claimableMissions = {};
+  final Set<String> _completedMissionKeys = {};
+  final Set<String> _failedMissionKeys = {};
+
+  // >>> kunci per-mission agar tidak dobel tap
+  final Map<String, bool> _busy = {'checkin': false};
+
+  final List<Map<String, dynamic>> _levelThresholds = const [
+    {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
+    {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
+    {'name': 'Gold', 'min_score': 3000, 'max_score': 6000},
+  ];
+
+  late Future<Map<String, dynamic>> _profileData;
+  late Future<List<_DayState>> _dailyRow;
+
+  // toast
+  late final AnimationController _toastCtl;
+  OverlayEntry? _toastEntry;
+  Timer? _toastTimer;
+  String _toastMsg = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _profileData = _loadProfileAndLevelInfo();
+    _dailyRow = _loadDailyRowData();
+    _initializeDate();
+
+    _toastCtl =
+        AnimationController(
+          vsync: this,
+          duration: const Duration(milliseconds: 220),
+          reverseDuration: const Duration(milliseconds: 180),
+        )..addStatusListener((s) {
+          if (s == AnimationStatus.dismissed) {
+            _toastEntry?.remove();
+            _toastEntry = null;
+          }
+        });
+
+    unawaited(_fetchData());
+  }
+
+  @override
+  void dispose() {
+    _toastTimer?.cancel();
+    _toastCtl.dispose();
+    _toastEntry?.remove();
+    _toastEntry = null;
+    super.dispose();
+  }
+
+  // ======================== DATA FLOW ========================
+
   Future<void> _fetchData() async {
     setState(() {
       _profileData = _loadProfileAndLevelInfo();
@@ -36,45 +94,45 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     if (user == null) return;
 
     try {
-      // Tambahkan filter tanggal hari ini untuk performa
       final today = _yyyyMmDd(_dateOnly(DateTime.now()));
-      
       final rows = await client
           .from('mission_history')
-          .select('id, status, mission_type(*)')
+          .select('status')
           .eq('user_id', user.id)
-          .eq('mission_date', today) // 👈 Fokus hanya hari ini
+          .eq('mission_date', today)
           .order('created_at', ascending: false);
 
       _processingMissions.clear();
       _claimableMissions.clear();
       _completedMissionKeys.clear();
+      _failedMissionKeys.clear();
 
       for (final r in rows as List) {
         final rawStatus = (r['status'] ?? '').toString();
-        
-        // Parse dengan lebih akurat
-        if (rawStatus.contains(':')) {
-          final parts = rawStatus.split(':');
-          final state = parts[0];
-          final missionKey = parts.length > 1 ? parts.sublist(1).join(':') : '';
+        if (!rawStatus.contains(':')) continue;
 
-          if (missionKey.isNotEmpty) {
-            switch (state) {
-              case 'processing':
-                _processingMissions[missionKey] = true; // 👈 Ini yang missing
-                break;
-              case 'completed':
-              case 'claim':
-              case 'valid':
-                _claimableMissions.add(missionKey);
-                break;
-              case 'claimed':
-              case 'complete':
-                _completedMissionKeys.add(missionKey);
-                break;
-            }
-          }
+        final idx = rawStatus.indexOf(':');
+        final state = rawStatus.substring(0, idx).toLowerCase();
+        final missionKey = rawStatus.substring(idx + 1);
+
+        if (missionKey.isEmpty) continue;
+
+        switch (state) {
+          case 'processing':
+            _processingMissions[missionKey] = true;
+            break;
+          case 'completed': // siap klaim
+          case 'valid':
+          case 'claim':
+            _claimableMissions.add(missionKey);
+            break;
+          case 'claimed': // >>> hanya claimed yang dianggap "Selesai"
+          case 'complete':
+            _completedMissionKeys.add(missionKey);
+            break;
+          case 'failed':
+            _failedMissionKeys.add(missionKey);
+            break;
         }
       }
 
@@ -84,119 +142,129 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // Fungsi untuk mengklaim poin
-  Future<void> _claimReward(_MissionDef m) async {
+  // >>> KLAIM: update completed -> claimed, tambah poin; idempoten & rollback bila gagal
+  // 1) KLAIM (misi video) - 1x call, langsung selesai + poin
+  Future<bool> _claimReward(_MissionDef m) async {
+    if (_busy[m.key] == true) return false;
+    _busy[m.key] = true;
+    setState(() {});
+
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) {
+      _busy[m.key] = false;
+      setState(() {});
+      return false;
+    }
+
+    final ok =
+        await client.rpc(
+              'claim_mission',
+              params: {
+                'p_user_id': user.id,
+                'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
+                'p_key': m.key,
+                'p_points': m.points,
+              },
+            )
+            as bool? ??
+        false;
+
+    _busy[m.key] = false;
+
+    if (!mounted) return ok;
+    if (ok) {
+      setState(() {
+        _claimableMissions.remove(m.key);
+        _completedMissionKeys.add(m.key);
+        _profileData = _loadProfileAndLevelInfo();
+      });
+      _showTopToast(
+        'Berhasil mengklaim ${m.points} poin!',
+        bg: AppColors.rewardGreenPrimary,
+      );
+    } else {
+      _showTopToast('Belum siap diklaim.', bg: Colors.orange);
+    }
+    return ok;
+  }
+
+  // >>> CHECK-IN: atomik (insert claimed + tambah poin). Rollback kalau RPC gagal.
+  // 2) CHECK-IN - 1x tap, langsung claimed + poin (idempoten)
+  Future<void> _autoClaimCheckin(_MissionDef m) async {
+    if (_busy['checkin'] == true) return;
+    _busy['checkin'] = true;
+    setState(() {});
+
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    if (user == null) {
+      _showTopToast('Silakan login terlebih dahulu.', bg: Colors.red);
+      _busy['checkin'] = false;
+      setState(() {});
+      return;
+    }
+
+    final ok =
+        await client.rpc(
+              'checkin_claim',
+              params: {
+                'p_user_id': user.id,
+                'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
+                'p_points': m.points,
+              },
+            )
+            as bool? ??
+        false;
+
+    _busy['checkin'] = false;
+
+    if (!mounted) return;
+    if (ok) {
+      setState(() {
+        _completedMissionKeys.add(m.key);
+        _profileData = _loadProfileAndLevelInfo();
+        _dailyRow = _loadDailyRowData();
+      });
+      _showTopToast('Check-in berhasil: +${m.points} poin');
+    } else {
+      _showTopToast('Check-in belum dapat diproses.', bg: Colors.orange);
+    }
+  }
+
+  // >>> Prefetch “Selesai” = hanya claimed
+  Future<void> _prefetchCompletedToday() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
     if (user == null) return;
 
+    final today = _yyyyMmDd(_dateOnly(DateTime.now()));
     try {
-      // Cari baris yang statusnya completed:<key>
-      final missionRow = await client
+      final rows = await client
           .from('mission_history')
-          .select('id, mission_type!inner(mission_id, points)')
+          .select('status')
           .eq('user_id', user.id)
-          .like('status', 'completed:%')
-          .eq('mission_type.mission_id', m.key)
-          .maybeSingle();
+          .eq('mission_date', today);
 
-      if (missionRow == null) {
-        _showTopToast('Tidak ada misi yang bisa diklaim.', bg: Colors.orange);
-        return;
+      final keys = <String>{};
+      for (final r in rows as List) {
+        final s = (r['status'] ?? '').toString();
+        if (s.startsWith('claimed:')) keys.add(s.split(':').last);
       }
 
-      final int missionHistoryId = missionRow['id'];
-      final int points = (missionRow['mission_type']['points'] as num).toInt();
-
-      // Update status jadi claimed:<key>
-      await client
-          .from('mission_history')
-          .update({'status': 'claimed:${m.key}'})
-          .eq('id', missionHistoryId);
-
-      // Tambah poin via RPC
-      await client.rpc(
-        'increment_score',
-        params: {'p_user_id': user.id, 'p_amount': points},
-      );
-
-      _showTopToast('Tugas selesai! +$points poin!', bg: AppColors.fernGreen);
-      await _fetchData();
+      if (keys.isNotEmpty) {
+        setState(() {
+          _completedMissionKeys
+            ..clear()
+            ..addAll(keys);
+        });
+      }
     } catch (e) {
-      debugPrint('Error saat mengklaim reward: $e');
-      _showTopToast('Gagal mengklaim poin.', bg: Colors.red);
+      debugPrint('prefetchCompletedToday err: $e');
     }
   }
 
-  Future<void> _updateMissionStatus(String key, String status) async {
-    final user = Supabase.instance.client.auth.currentUser;
-    if (user == null) return;
-
-    final today = DateTime.now();
-
-    await Supabase.instance.client.from('mission_history').upsert({
-      'user_id': user.id,
-      'mission_date': DateTime(today.year, today.month, today.day).toIso8601String(),
-      'status': '$status:$key', // ⬅️ format unified (processing:key / completed:key / claimed:key)
-      'created_at': DateTime.now().toIso8601String(),
-    });
-  }
-
-
-  final Map<String, bool> _processingMissions = {};
-  final Set<String> _claimableMissions = {};
-
-  final List<Map<String, dynamic>> _levelThresholds = const [
-    {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
-    {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
-    {'name': 'Gold', 'min_score': 3000, 'max_score': 6000},
-  ];
-
-  // dipakai agar UI bisa di-refresh setelah poin berubah
-  late Future<Map<String, dynamic>> _profileData;
-  late Future<List<_DayState>> _dailyRow;
-
-  // cache status misi “hari ini” untuk mengganti tombol Mulai→Selesai
-  final Set<String> _completedMissionKeys = {};
-
-  // ------------------------ Top-toast (success) ------------------------
-  late final AnimationController _toastCtl;
-  OverlayEntry? _toastEntry;
-  Timer? _toastTimer;
-  String _toastMsg = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _profileData = _loadProfileAndLevelInfo();
-    _dailyRow = _loadDailyRowData();
-    _initializeDate();
-
-    // animator toast
-    _toastCtl =
-        AnimationController(
-          vsync: this,
-          duration: const Duration(milliseconds: 220),
-          reverseDuration: const Duration(milliseconds: 180),
-        )..addStatusListener((s) {
-          if (s == AnimationStatus.dismissed) {
-            _toastEntry?.remove();
-            _toastEntry = null;
-          }
-        });
-
-    // Prefetch misi hari ini supaya tombol langsung “Selesai” kalau sudah done.
-    _prefetchCompletedToday();
-  }
-
-  @override
-  void dispose() {
-    _toastTimer?.cancel();
-    _toastCtl.dispose();
-    _toastEntry?.remove();
-    _toastEntry = null;
-    super.dispose();
-  }
+  // ======================== UI HELPERS ========================
 
   void _showTopToast(
     String message, {
@@ -235,6 +303,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
+                  // >>> penting: named parameter padding (memperbaiki error)
                   padding: const EdgeInsets.symmetric(
                     horizontal: 14,
                     vertical: 12,
@@ -271,16 +340,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
 
     _toastCtl.forward(from: 0);
-
-    // 🔴 PENTING: durasi toast diperpanjang supaya jelas terlihat
     _toastTimer = Timer(const Duration(milliseconds: 2500), () {
       _toastCtl.reverse();
     });
   }
-  // --------------------------------------------------------------------
-
-  @override
-  Widget build(BuildContext context) => _buildRoot(context);
 
   Future<void> _initializeDate() async {
     await initializeDateFormatting('id_ID', null);
@@ -292,226 +355,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     });
   }
 
-  // ===================== PROFILE + LEVEL =====================
-
-  Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-
-    if (user == null) {
-      return {
-        'name': 'Pengguna',
-        'score': 0,
-        'level_name': 'Bronze',
-        'progress_text': '1000 poin menuju level Silver',
-        'progress_value': 0.0,
-      };
-    }
-
-    try {
-      final row = await client
-          .from('profiles')
-          .select('full_name, score')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (row == null) throw Exception('User profile not found.');
-
-      final fullNameFromRow = (row['full_name'] as String?)?.trim();
-      final fullName = (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
-          ? fullNameFromRow
-          : (user.email?.split('@').first ?? 'Pengguna');
-
-      final score = (row['score'] as num?)?.toInt() ?? 0;
-
-      final currentLevel = _levelThresholds.firstWhere(
-        (l) =>
-            score >= (l['min_score'] as int) && score < (l['max_score'] as int),
-        orElse: () => _levelThresholds.last,
-      );
-
-      String progressText;
-      double progressValue;
-
-      if (currentLevel['name'] == 'Gold') {
-        final minS = currentLevel['min_score'] as int;
-        final maxS = currentLevel['max_score'] as int;
-        final range = maxS - minS;
-        progressValue = range > 0 ? (score - minS) / range : 0.0;
-        progressText = '${maxS - score} poin menuju batas akhir';
-      } else {
-        final nextIndex = _levelThresholds.indexOf(currentLevel) + 1;
-        final next = _levelThresholds[nextIndex];
-        final nextMin = next['min_score'] as int;
-        final curMin = currentLevel['min_score'] as int;
-        final range = nextMin - curMin;
-        progressValue = range > 0 ? (score - curMin) / range : 1.0;
-        progressText = '${nextMin - score} poin menuju level ${next['name']}';
-      }
-
-      return {
-        'name': fullName,
-        'score': score,
-        'level_name': currentLevel['name'] as String,
-        'progress_text': progressText,
-        'progress_value': progressValue,
-      };
-    } catch (e) {
-      debugPrint('Error loading profile and level info: $e');
-      return {
-        'name': 'Pengguna',
-        'score': 0,
-        'level_name': 'Bronze',
-        'progress_text': '1000 poin menuju level Silver',
-        'progress_value': 0.0,
-      };
-    }
-  }
-
-  // ===================== TUGAS HARIAN (DATA) =====================
-
-  Future<List<_DayState>> _loadDailyRowData() async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    final today = _dateOnly(DateTime.now());
-
-    if (user == null) {
-      // semua abu-abu, hari ini diborder hijau
-      return _weekSkeleton(today, today);
-    }
-
-    // ambil tanggal dibuatnya akun; fallback: today
-    DateTime createdAt = today;
-    try {
-      final prof = await client
-          .from('profiles')
-          .select('created_at')
-          .eq('id', user.id)
-          .maybeSingle();
-
-      if (prof != null && prof['created_at'] != null) {
-        createdAt = _dateOnly(DateTime.parse(prof['created_at'].toString()));
-      }
-    } catch (_) {}
-
-    // Window minggu ini: Senin..Minggu
-    final monday = _mondayOf(today);
-    final sunday = monday.add(const Duration(days: 6));
-
-    // Ambil mission_history minggu ini
-    final Set<DateTime> successDays = {};
-    final Set<DateTime> activityDays = {};
-    try {
-      final rows = await client
-          .from('mission_history')
-          .select('mission_date,status')
-          .eq('user_id', user.id)
-          .gte('mission_date', _yyyyMmDd(monday))
-          .lte('mission_date', _yyyyMmDd(sunday));
-
-      for (final r in rows as List) {
-        final dStr = r['mission_date'];
-        if (dStr == null) continue;
-        final d = _dateOnly(DateTime.parse(dStr.toString()));
-        activityDays.add(d); // ada baris apapun -> ada aktivitas
-
-        final status = (r['status'] ?? '').toString().toLowerCase();
-        // ✅ status kita "completed:<key>" → tetap terdeteksi
-        final ok = [
-          'done',
-          'completed',
-          'success',
-          'selesai',
-          'finish',
-        ].any((k) => status.contains(k));
-        if (ok) successDays.add(d);
-      }
-    } catch (e) {
-      debugPrint('err load mission_history: $e');
-    }
-
-    // Rakit 7 hari
-    final labels = const [
-      'Senin',
-      'Selasa',
-      'Rabu',
-      'Kamis',
-      'Jumat',
-      'Sabtu',
-      'Minggu',
-    ];
-    final List<_DayState> result = [];
-    for (int i = 0; i < 7; i++) {
-      final d = monday.add(Duration(days: i));
-      final beforeCreated = d.isBefore(createdAt);
-      final inFuture = d.isAfter(today);
-      final eligible = !(beforeCreated || inFuture);
-      final isCompleted = eligible && successDays.contains(d);
-      final hasActivity = eligible && activityDays.contains(d);
-      final isCurrent = d == today;
-      result.add(
-        _DayState(
-          label: labels[i],
-          date: d,
-          eligible: eligible,
-          completed: isCompleted,
-          hasActivity: hasActivity,
-          isCurrent: isCurrent,
-        ),
-      );
-    }
-    return result;
-  }
-
-  // skeleton satu minggu saat tidak login
-  List<_DayState> _weekSkeleton(DateTime createdAt, DateTime today) {
-    final monday = _mondayOf(today);
-    final labels = const [
-      'Senin',
-      'Selasa',
-      'Rabu',
-      'Kamis',
-      'Jumat',
-      'Sabtu',
-      'Minggu',
-    ];
-
-    final List<_DayState> out = [];
-    for (int i = 0; i < 7; i++) {
-      final d = DateTime(monday.year, monday.month, monday.day + i);
-      final beforeCreated = d.isBefore(createdAt);
-      final inFuture = d.isAfter(today);
-      final eligible = !(beforeCreated || inFuture);
-      out.add(
-        _DayState(
-          label: labels[i],
-          date: d,
-          eligible: eligible,
-          completed: false,
-          hasActivity: false,
-          isCurrent:
-              d.year == today.year &&
-              d.month == today.month &&
-              d.day == today.day,
-        ),
-      );
-    }
-    return out;
-  }
-
-  // ===================== HELPERS =====================
-
   DateTime _dateOnly(DateTime d) => DateTime(d.year, d.month, d.day);
-
   DateTime _mondayOf(DateTime d) {
-    final wd = d.weekday; // Mon=1 ... Sun=7
+    final wd = d.weekday;
     return _dateOnly(d.subtract(Duration(days: wd - 1)));
   }
 
   String _yyyyMmDd(DateTime d) =>
       '${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
 
-  // Poin per level (brief)
   int _pointsForLevel(String levelName) {
     switch (levelName) {
       case 'Silver':
@@ -524,7 +376,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // 5 misi unified
   List<_MissionDef> _missions(String levelName) {
     final p = _pointsForLevel(levelName);
     return [
@@ -561,7 +412,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     ];
   }
 
-  // Untuk mendapatkan missionType
   String _getMissionType(String missionKey) {
     switch (missionKey) {
       case 'record_paper':
@@ -620,148 +470,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // ✅ Prefetch: misi hari ini yang sudah selesai (supaya tombol langsung Selesai)
-  Future<void> _prefetchCompletedToday() async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    if (user == null) return;
+  // ======================== BUILD UI ========================
 
-    final today = _yyyyMmDd(_dateOnly(DateTime.now()));
-    try {
-      final rows = await client
-          .from('mission_history')
-          .select('status')
-          .eq('user_id', user.id)
-          .eq('mission_date', today);
-
-      final keys = <String>{};
-      for (final r in rows as List) {
-        final s = (r['status'] ?? '').toString();
-        // format "completed:<key>"
-        if (s.startsWith('completed:')) {
-          keys.add(s.substring('completed:'.length));
-        }
-      }
-
-      if (keys.isNotEmpty) {
-        setState(() {
-          _completedMissionKeys
-            ..clear()
-            ..addAll(keys);
-        });
-      }
-    } catch (e) {
-      debugPrint('prefetchCompletedToday err: $e');
-    }
-  }
-
-  // ✅ Cek apakah misi <key> sudah completed hari ini (idempotent)
-  Future<bool> _alreadyCompletedToday(String missionKey) async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    if (user == null) return false;
-    final today = _dateOnly(DateTime.now());
-
-    try {
-      final row = await client
-          .from('mission_history')
-          .select('id')
-          .eq('user_id', user.id)
-          .eq('mission_date', _yyyyMmDd(today))
-          .eq('status', 'completed:$missionKey')
-          .maybeSingle();
-      return row != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
-  // 🔴 PENTING: Selesaikan misi (mode uji → langsung selesai & tambah poin)
-  Future<void> _completeMission(_MissionDef m, int points) async {
-    final client = Supabase.instance.client;
-    final user = client.auth.currentUser;
-    if (user == null) {
-      _showTopToast('Silakan login terlebih dahulu.', bg: Colors.red);
-      return;
-    }
-
-    final today = _dateOnly(DateTime.now());
-    final dateStr = _yyyyMmDd(today);
-    final statusStr = 'completed:${m.key}';
-
-    try {
-      // Idempotent: kalau sudah ada jangan dobel
-      if (await _alreadyCompletedToday(m.key)) {
-        setState(() => _completedMissionKeys.add(m.key));
-        _showTopToast('Tugas sudah selesai hari ini.');
-        return;
-      }
-
-      // INSERT mission_history
-      await client.from('mission_history').insert({
-        // 🔴 PENTING (RLS): user_id harus = auth.uid()
-        'user_id': user.id,
-        // Boleh dihilangkan jika kolom punya default current_date
-        'mission_date': dateStr,
-        'status': statusStr,
-        // Boleh dihilangkan jika kolom punya default now()
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      });
-
-      // UPDATE score (bigint → num)
-      final prof = await client
-          .from('profiles')
-          .select('score')
-          .eq('id', user.id)
-          .maybeSingle();
-      final cur = (prof?['score'] as num?)?.toInt() ?? 0;
-
-      await client
-          .from('profiles')
-          .update({'score': cur + points})
-          .eq('id', user.id);
-
-      // Refresh UI
-      setState(() {
-        _completedMissionKeys.add(m.key);
-        _profileData = _loadProfileAndLevelInfo();
-        _dailyRow = _loadDailyRowData();
-      });
-
-      _showTopToast('Tugas selesai: +$points poin'); // toast di atas
-    } catch (e) {
-      // ℹ️ Jika pakai unique index (user_id, mission_date, status),
-      // duplikat akan lempar error 23505 → anggap sudah selesai.
-      final msg = e.toString();
-      if (msg.contains('duplicate key value') || msg.contains('23505')) {
-        setState(() => _completedMissionKeys.add(m.key));
-        _showTopToast('Tugas sudah tercatat.');
-        return;
-      }
-
-      debugPrint('completeMission err: $e');
-
-      // Check-in wajib berhasil (mode uji)
-      if (m.key == 'checkin') {
-        setState(() {
-          _completedMissionKeys.add(m.key);
-          _profileData = _loadProfileAndLevelInfo();
-          _dailyRow = _loadDailyRowData();
-        });
-        _showTopToast('Check-in dicatat (mode uji).');
-      } else {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Gagal menyelesaikan tugas. Coba lagi.'),
-            ),
-          );
-        }
-      }
-    }
-  }
-
-  // ===================== UI ROOT =====================
+  @override
+  Widget build(BuildContext context) => _buildRoot(context);
 
   Widget _buildRoot(BuildContext context) {
     return Scaffold(
@@ -782,8 +494,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       ),
     );
   }
-
-  // ===================== UI: Header & Profile Card =====================
 
   Widget _buildHeaderSection() {
     return Stack(
@@ -917,7 +627,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                     ),
                     const Spacer(),
                     TextButton(
-                      onPressed: () {},
+                      onPressed: () async {
+                        await Navigator.of(context).push(
+                          MaterialPageRoute(
+                            builder: (_) => const MissionHistoryPage(),
+                          ),
+                        );
+                        if (!mounted) return;
+                        await _fetchData();
+                      },
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -1006,8 +724,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     );
   }
 
-  // ===================== UI: Missions Section =====================
-
   Widget _buildMissionsSection({required String levelName}) {
     Color missionsBgColor;
     int selectedLevelIndex;
@@ -1051,93 +767,107 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 children: [
                   _buildLevelTabs(selectedLevelIndex),
                   const SizedBox(height: 20),
-                  // 5 misi unified
                   ...missions.map((m) {
-                    // Deklarasikan semua variabel status di awal
                     final isDone = _completedMissionKeys.contains(m.key);
                     final isProcessing = _processingMissions[m.key] ?? false;
                     final isClaimable = _claimableMissions.contains(m.key);
+                    final isFailed = _failedMissionKeys.contains(m.key);
+                    final isBusy = _busy[m.key] == true;
 
                     VoidCallback? onPressedAction;
                     String buttonText;
 
-                    // Atur logika tombol berdasarkan status
                     if (isDone) {
                       buttonText = 'Selesai';
                       onPressedAction = null;
                     } else if (isClaimable) {
-                      buttonText = 'Klaim';
+                      buttonText = isBusy ? '...' : 'Klaim';
+                      onPressedAction = isBusy
+                          ? null
+                          : () async {
+                              final ok = await _claimReward(m);
+                              if (!ok) return;
+                              _showTopToast(
+                                'Berhasil mengklaim ${m.points} poin!',
+                                bg: AppColors.rewardGreenPrimary,
+                              );
+                              await _fetchData();
+                            };
+                    } else if (isProcessing) {
+                      buttonText = 'Proses';
+                      onPressedAction = null;
+                    } else if (isFailed) {
+                      buttonText = 'Ulangi';
                       onPressedAction = () async {
-                        await _claimReward(m);
-                        await _updateMissionStatus(m.key, 'claimed');
-                        _showTopToast('Berhasil mengklaim ${m.points} poin!', bg: AppColors.rewardGreenPrimary);
-                        await _fetchData();
+                        final navContext = context;
+                        final popResult = await Navigator.push(
+                          navContext,
+                          MaterialPageRoute(
+                            builder: (_) => ScanVideo(
+                              cameras: widget.cameras,
+                              missionKey: m.key,
+                              missionType: _getMissionType(m.key),
+                              onValidationComplete: (bool _) async {
+                                if (!mounted) return;
+                                await _fetchData();
+                              },
+                            ),
+                          ),
+                        );
+
+                        if (!mounted) return;
+                        if (popResult == true) {
+                          setState(() {
+                            _failedMissionKeys.remove(m.key);
+                            _processingMissions[m.key] = true;
+                          });
+                        }
+                        unawaited(_fetchMissionHistory());
                       };
                     } else {
-                      if (isProcessing) {
-                        buttonText = 'Proses';
-                        onPressedAction = null;
+                      if (m.key == 'checkin') {
+                        buttonText = _busy['checkin'] == true ? '...' : 'Klaim';
+                        onPressedAction = _busy['checkin'] == true
+                            ? null
+                            : () => _autoClaimCheckin(m);
                       } else {
                         buttonText = 'Mulai';
-                        if (m.key == 'checkin') {
-                          onPressedAction = () => _completeMission(m, m.points);
-                        } else {
-                          onPressedAction = () async {
-                            final user = Supabase.instance.client.auth.currentUser;
-                            if (user == null) {
-                              _showTopToast('Silakan login terlebih dahulu.', bg: Colors.red);
-                              return;
-                            }
+                        onPressedAction = () async {
+                          final user =
+                              Supabase.instance.client.auth.currentUser;
+                          if (user == null) {
+                            _showTopToast(
+                              'Silakan login terlebih dahulu.',
+                              bg: Colors.red,
+                            );
+                            return;
+                          }
 
-                            // tulis ke DB: processing:<key>
-                            await _updateMissionStatus(m.key, 'processing');
+                          final navContext = context;
+                          final popResult = await Navigator.push(
+                            navContext,
+                            MaterialPageRoute(
+                              builder: (_) => ScanVideo(
+                                cameras: widget.cameras,
+                                missionKey: m.key,
+                                missionType: _getMissionType(m.key),
+                                onValidationComplete: (bool _) async {
+                                  if (!mounted) return;
+                                  await _fetchData();
+                                },
+                              ),
+                            ),
+                          );
 
-                            // optimistic UI
+                          if (!mounted) return;
+                          if (popResult == true) {
                             setState(() {
+                              _failedMissionKeys.remove(m.key);
                               _processingMissions[m.key] = true;
                             });
-
-                            final navContext = context;
-                            await Navigator.push(
-                              // ignore: use_build_context_synchronously
-                              navContext,
-                              MaterialPageRoute(
-                                builder: (_) => ScanVideo(
-                                  cameras: widget.cameras,
-                                  missionType: _getMissionType(m.key),
-                                  onValidationComplete: (bool isValid) async {
-                                    if (!mounted) return;
-
-                                    if (isValid) {
-                                      // setelah validasi sukses, tandai completed:<key> (siap klaim)
-                                      await _updateMissionStatus(m.key, 'claim');
-
-                                      if (!mounted) return;
-                                      _showTopToast('Validasi berhasil! Silakan Klaim poin Anda.',
-                                          bg: AppColors.fernGreen);
-                                    } else {
-                                      final user = Supabase.instance.client.auth.currentUser;
-                                      if (user != null) {
-                                        await Supabase.instance.client.from('mission_history').delete().match({
-                                          'user_id': user.id,
-                                          'status': 'processing:${m.key}',
-                                        });
-                                      }
-
-                                      _showTopToast('Validasi gagal. Coba lagi.', bg: Colors.red);
-
-                                      // optional: kamu bisa reset status DB atau biarkan 'processing:<key>'
-                                      // await _updateMissionStatus(m.key, 'processing'); // atau hapus/ubah
-                                    }
-
-                                    if (!mounted) return;
-                                    await _fetchData();
-                                  },
-                                ),
-                              ),
-                            );
-                          };
-                        }
+                          }
+                          unawaited(_fetchMissionHistory());
+                        };
                       }
                     }
 
@@ -1155,8 +885,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         pointsBorderColor: theme.pointsBorderColor,
                         pointsTextColor: theme.pointsTextColor,
                         titleColor: theme.titleColor,
-                        buttonText:
-                            buttonText, // Kirim teks tombol yang sudah ditentukan
+                        buttonText: buttonText,
                         isCompleted: isDone,
                         onPressed: onPressedAction,
                       ),
@@ -1170,8 +899,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       ),
     );
   }
-
-  // ---------------- TUGAS HARIAN (UI) ----------------
 
   Widget _buildDailyCheckInSection() {
     return Column(
@@ -1282,12 +1009,11 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     required bool hasActivity,
     required bool isCurrent,
   }) {
-    // Mapping UI harian sesuai spesifikasi
     final bool isProgress = eligible && isCurrent && !isCompleted;
 
     Widget? inner;
     if (!eligible) {
-      inner = null; // sebelum akun dibuat / setelah hari ini
+      inner = null;
     } else if (isProgress) {
       inner = Icon(
         Icons.attach_money,
@@ -1330,8 +1056,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     );
   }
 
-  // ------------------ Level tabs & missions ------------------
-
   Widget _buildLevelTabs(int selectedLevelIndex) {
     final levelsData = [
       {
@@ -1370,7 +1094,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           final level = levelsData[index];
           return Expanded(
             child: GestureDetector(
-              onTap: null, // level mengikuti score (tidak manual)
+              onTap: null,
               child: Container(
                 margin: const EdgeInsets.symmetric(horizontal: 4),
                 padding: const EdgeInsets.symmetric(vertical: 8),
@@ -1413,17 +1137,212 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       ),
     );
   }
+
+  // =================== DATA HELPERS ===================
+
+  Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+
+    if (user == null) {
+      return {
+        'name': 'Pengguna',
+        'score': 0,
+        'level_name': 'Bronze',
+        'progress_text': '1000 poin menuju level Silver',
+        'progress_value': 0.0,
+      };
+    }
+
+    try {
+      final row = await client
+          .from('profiles')
+          .select('full_name, score')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (row == null) throw Exception('User profile not found.');
+
+      final fullNameFromRow = (row['full_name'] as String?)?.trim();
+      final fullName = (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
+          ? fullNameFromRow
+          : (user.email?.split('@').first ?? 'Pengguna');
+
+      final score = (row['score'] as num?)?.toInt() ?? 0;
+
+      final currentLevel = _levelThresholds.firstWhere(
+        (l) =>
+            score >= (l['min_score'] as int) && score < (l['max_score'] as int),
+        orElse: () => _levelThresholds.last,
+      );
+
+      String progressText;
+      double progressValue;
+
+      if (currentLevel['name'] == 'Gold') {
+        final minS = currentLevel['min_score'] as int;
+        final maxS = currentLevel['max_score'] as int;
+        final range = maxS - minS;
+        progressValue = range > 0 ? (score - minS) / range : 0.0;
+        progressText = '${maxS - score} poin menuju batas akhir';
+      } else {
+        final nextIndex = _levelThresholds.indexOf(currentLevel) + 1;
+        final next = _levelThresholds[nextIndex];
+        final nextMin = next['min_score'] as int;
+        final curMin = currentLevel['min_score'] as int;
+        final range = nextMin - curMin;
+        progressValue = range > 0 ? (score - curMin) / range : 1.0;
+        progressText = '${nextMin - score} poin menuju level ${next['name']}';
+      }
+
+      return {
+        'name': fullName,
+        'score': score,
+        'level_name': currentLevel['name'] as String,
+        'progress_text': progressText,
+        'progress_value': progressValue,
+      };
+    } catch (e) {
+      debugPrint('Error loading profile and level info: $e');
+      return {
+        'name': 'Pengguna',
+        'score': 0,
+        'level_name': 'Bronze',
+        'progress_text': '1000 poin menuju level Silver',
+        'progress_value': 0.0,
+      };
+    }
+  }
+
+  Future<List<_DayState>> _loadDailyRowData() async {
+    final client = Supabase.instance.client;
+    final user = client.auth.currentUser;
+    final today = _dateOnly(DateTime.now());
+
+    if (user == null) {
+      return _weekSkeleton(today, today);
+    }
+
+    DateTime createdAt = today;
+    try {
+      final prof = await client
+          .from('profiles')
+          .select('created_at')
+          .eq('id', user.id)
+          .maybeSingle();
+
+      if (prof != null && prof['created_at'] != null) {
+        createdAt = _dateOnly(DateTime.parse(prof['created_at'].toString()));
+      }
+    } catch (_) {}
+
+    final monday = _mondayOf(today);
+    final sunday = monday.add(const Duration(days: 6));
+
+    final Set<DateTime> successDays = {};
+    final Set<DateTime> activityDays = {};
+    try {
+      final rows = await client
+          .from('mission_history')
+          .select('mission_date,status')
+          .eq('user_id', user.id)
+          .gte('mission_date', _yyyyMmDd(monday))
+          .lte('mission_date', _yyyyMmDd(sunday));
+
+      for (final r in rows as List) {
+        final dStr = r['mission_date'];
+        if (dStr == null) continue;
+        final d = _dateOnly(DateTime.parse(dStr.toString()));
+        activityDays.add(d);
+
+        final status = (r['status'] ?? '').toString().toLowerCase();
+        final ok = [
+          'claimed', // >>> sukses mingguan = sudah diklaim
+          'done',
+          'finish',
+        ].any((k) => status.startsWith(k));
+        if (ok) successDays.add(d);
+      }
+    } catch (e) {
+      debugPrint('err load mission_history: $e');
+    }
+
+    final labels = const [
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
+    ];
+    final List<_DayState> result = [];
+    for (int i = 0; i < 7; i++) {
+      final d = monday.add(Duration(days: i));
+      final beforeCreated = d.isBefore(createdAt);
+      final inFuture = d.isAfter(today);
+      final eligible = !(beforeCreated || inFuture);
+      final isCompleted = eligible && successDays.contains(d);
+      final hasActivity = eligible && activityDays.contains(d);
+      final isCurrent = d == today;
+      result.add(
+        _DayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: isCompleted,
+          hasActivity: hasActivity,
+          isCurrent: isCurrent,
+        ),
+      );
+    }
+    return result;
+  }
+
+  List<_DayState> _weekSkeleton(DateTime createdAt, DateTime today) {
+    final monday = _mondayOf(today);
+    final labels = const [
+      'Senin',
+      'Selasa',
+      'Rabu',
+      'Kamis',
+      'Jumat',
+      'Sabtu',
+      'Minggu',
+    ];
+
+    final List<_DayState> out = [];
+    for (int i = 0; i < 7; i++) {
+      final d = DateTime(monday.year, monday.month, monday.day + i);
+      final beforeCreated = d.isBefore(createdAt);
+      final inFuture = d.isAfter(today);
+      final eligible = !(beforeCreated || inFuture);
+      out.add(
+        _DayState(
+          label: labels[i],
+          date: d,
+          eligible: eligible,
+          completed: false,
+          hasActivity: false,
+          isCurrent:
+              d.year == today.year &&
+              d.month == today.month &&
+              d.day == today.day,
+        ),
+      );
+    }
+    return out;
+  }
 }
 
-// ===================== Model kecil untuk state hari =====================
-
+// ===== MODELS =====
 class _DayState {
   final String label;
   final DateTime date;
-  final bool eligible; // false = sebelum akun dibuat ATAU setelah hari ini
-  final bool completed; // true = ada mission_history status sukses
-  final bool hasActivity; // true = ada baris mission_history apapun
-  final bool isCurrent; // true = hari ini
+  final bool eligible;
+  final bool completed;
+  final bool hasActivity;
+  final bool isCurrent;
 
   _DayState({
     required this.label,
@@ -1434,8 +1353,6 @@ class _DayState {
     required this.isCurrent,
   });
 }
-
-// ===================== Model & Theme bantuan =====================
 
 class _MissionDef {
   final String key;
