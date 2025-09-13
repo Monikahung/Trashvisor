@@ -8,7 +8,7 @@ class GuideVideo extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return DraggableScrollableSheet(
-      initialChildSize: 0.5,
+      initialChildSize: 0.465,
       minChildSize: 0.3,
       maxChildSize: 0.9,
       expand: false,
@@ -43,7 +43,7 @@ class GuideVideo extends StatelessWidget {
                         const SizedBox(height: 10),
                         const Center(
                           child: Text(
-                            'Panduan Trash Vision',
+                            'Panduan Penyelesaian Misi',
                             style: TextStyle(
                               fontFamily: 'Nunito',
                               fontSize: 20,
@@ -52,13 +52,23 @@ class GuideVideo extends StatelessWidget {
                             ),
                           ),
                         ),
+                        const SizedBox(height: 5),
+                        const Center(
+                          child: Text(
+                            'Rekam Video Pembuangan Sampah',
+                            style: TextStyle(
+                              fontFamily: 'Nunito',
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.darkMossGreen,
+                            ),
+                          ),
+                        ),
                         const SizedBox(height: 20),
-                        _buildGuideItem('1. Arahkan kamera ke sampah.'),
-                        _buildGuideItem('2. Tunggu hasil identifikasi AI.'),
-                        _buildGuideItem('3. Gunakan Trash Chatbot untuk info lebih lanjut.'),
-                        _buildGuideItem('4. Lihat rekomendasi penanganan sampah.'),
-                        _buildGuideItem('5. Cek dampak melalui Trash Capsule.'),
-                        _buildGuideItem('6. Temukan lokasi terdekat dengan Trash Location.'),
+                        _buildGuideItem('1. Arahkan kamera saat membuang sampah.'),
+                        _buildGuideItem('2. Pastikan tangan terlihat memegang sampah beserta tong sampah.'),
+                        _buildGuideItem('3. Perekaman maksimal 8 detik.'),
+                        _buildGuideItem('4. Tunggu hasil validasi pembuangan sampah.'),
                         const SizedBox(height: 30),
                       ],
                     ),
