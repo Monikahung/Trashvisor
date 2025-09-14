@@ -173,40 +173,49 @@ class _HomePageState extends State<HomePage> {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 10,
-                  vertical: 5,
-                ),
-                decoration: BoxDecoration(
-                  color: AppColors.darkOliveGreen.withAlpha(204),
+              Material(
+                color: Colors.transparent,
+                child: InkWell(
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: Colors.white, width: 2),
-                ),
-                // 🔴 PENTING: ganti angka statis jadi nilai dari DB
-                child: Row(
-                  children: [
-                    const Icon(Icons.monetization_on, color: Colors.white),
-                    const SizedBox(width: 5),
-                    _scoreLoaded
-                        ? Text(
-                            _nf.format(_score), // contoh: 1.771 atau 12.345
-                            style: const TextStyle(
-                              fontFamily: 'Roboto',
-                              fontWeight: FontWeight.w600,
-                              fontSize: 13,
-                              color: Colors.white,
-                            ),
-                          )
-                        : const SizedBox(
-                            width: 16,
-                            height: 16,
-                            child: CircularProgressIndicator(
-                              strokeWidth: 2,
-                              color: Colors.white,
-                            ),
-                          ),
-                  ],
+                  onTap: () async {
+                    // Setelah balik dari EcoReward, refresh skor
+                    await _pushAndRefresh(EcoRewardPage(cameras: _availableCameras!));
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 5,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.darkOliveGreen.withAlpha(204),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: Colors.white, width: 2),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.monetization_on, color: Colors.white),
+                        const SizedBox(width: 5),
+                        _scoreLoaded
+                            ? Text(
+                                _nf.format(_score), // contoh: 1.771 atau 12.345
+                                style: const TextStyle(
+                                  fontFamily: 'Roboto',
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 13,
+                                  color: Colors.white,
+                                ),
+                              )
+                            : const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  color: Colors.white,
+                                ),
+                              ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
               Row(
