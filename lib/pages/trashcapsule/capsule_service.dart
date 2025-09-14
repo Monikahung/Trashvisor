@@ -9,16 +9,16 @@
 // /    datang, hanya 1 request yang benar-benar berjalan.
 // / 3) FALLBACK: hanya item[0] yang punya fallbackAsset untuk dipakai
 // /    sebagai HEADER image; 3 kartu narasi di UI tidak pakai gambar.
-// / 4) LIMIT: tetap dihitung per distinct waste_type dengan success=true
-// /    pada hari JKT (success=true = text && image berhasil).
+// / 4) LIMIT: [CHANGED] kini dihitung per GAMBAR sukses (good/bad apa pun) dengan URL tersimpan
+// /    pada hari JKT (bukan lagi distinct waste_type).
 // / ===================================================================
 import 'dart:convert';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'capsule_models.dart';
 import 'capsule_cache.dart';
 
-/// Batas harian (hitung distinct waste_type dengan success=true pada hari JKT).
-const int kDailyLimit = 2;
+/// Batas harian (total gambar sukses pada hari JKT).
+const int kDailyLimit = 4; // ⬅️ CHANGED: limit harian jadi 4 (total gambar)
 
 /// Default image size (dipakai kalau nanti kamu aktifkan image generator).
 const String kDefaultImageSize = '1024x1024';
@@ -59,14 +59,13 @@ class CapsuleService {
     final inflight = _inflight[key];
     if (inflight != null) return await inflight;
 
-    // 3) Tidak ada cache & tidak ada in-flight → lakukan panggilan (sekali).
-    final future = _doGenerate(wt, scenario);
+    // 3) Buat request baru + simpan ke map dedup
+    final future = _generateInner(wt, scenario);
     _inflight[key] = future;
 
     try {
       final result = await future;
-      // Simpan ke cache supaya bolak-balik Baik/Buruk (untuk waste yang sama)
-      // tidak memicu request/log ulang selama user belum mengganti search.
+      // Simpan ke cache agar navigasi bolak-balik tidak memicu request/log ulang
       CapsuleCache.instance.set(wt, scenario.db, result);
       return result;
     } finally {
@@ -74,11 +73,10 @@ class CapsuleService {
     }
   }
 
-  // -------------------------
-  // === PRIVATE: CORE IO  ===
-  // -------------------------
-  /// Panggil Edge Function + fallback + logging (dipanggil sekali per kombinasi).
-  Future<CapsuleResult> _doGenerate(String wt, CapsuleScenario scenario) async {
+  Future<CapsuleResult> _generateInner(
+    String wt,
+    CapsuleScenario scenario,
+  ) async {
     try {
       // Hitung sisa limit hanya untuk informasi di toast (tidak memblokir).
       final remaining = await remainingLimit();
@@ -114,10 +112,9 @@ class CapsuleService {
       return result;
     } catch (e) {
       // Exception jaringan/edge → fallback lokal + log.
-      final items = _fallbackItems(wt, scenario);
       final result = CapsuleResult(
-        items: items,
-        seed: 'local-fallback-${DateTime.now().millisecondsSinceEpoch}',
+        items: _fallbackItems(wt, scenario),
+        seed: 'exception',
         success: false,
         errorMessage: '$e',
       );
@@ -126,12 +123,13 @@ class CapsuleService {
     }
   }
 
-  String _key(String wasteType, CapsuleScenario scenario) =>
-      '${wasteType.trim().toLowerCase()}|${scenario.db}';
+  String _key(String wt, CapsuleScenario s) => '${wt.toLowerCase()}|${s.db}';
 
   // -------------------------
-  // === LIMIT & LOGGING   ===
+  // === LIMIT (INFO TOAST) ===
   // -------------------------
+
+  // (Fungsi lama dibiarkan ada untuk kompatibilitas, tapi tidak dipakai lagi)
   Future<int> countDistinctSuccessToday() async {
     final user = _client.auth.currentUser;
     if (user == null) return 0;
@@ -172,9 +170,57 @@ class CapsuleService {
     }
   }
 
+  // ⬅️ NEW: Hitung TOTAL gambar sukses hari ini (bukan distinct waste)
+  // Kriteria "gambar sukses": ada URL http(s) pada kolom image_urls.
+  Future<int> countImageSuccessToday() async {
+    final user = _client.auth.currentUser;
+    if (user == null) return 0;
+
+    // Coba pakai kolom created_on_jkt (tanggal lokal Jakarta) bila tersedia
+    try {
+      final rows = await _client
+          .from('simulation_logs')
+          .select('image_urls')
+          .eq('user_id', user.id)
+          .eq('created_on_jkt', _todayJakarta())
+          .limit(2000);
+
+      int used = 0;
+      for (final r in rows as List) {
+        final urls = (r['image_urls'] as List?) ?? const [];
+        final hasImage = urls.any((u) => u is String && (u as String).startsWith('http'));
+        if (hasImage) used++;
+      }
+      return used;
+    } catch (_) {
+      // Fallback approx dengan jendela UTC untuk tanggal JKT
+      final nowUtc = DateTime.now().toUtc();
+      final jktToday = nowUtc.add(const Duration(hours: 7));
+      final startUtc = DateTime.utc(jktToday.year, jktToday.month, jktToday.day).toIso8601String();
+      final endUtc = DateTime.utc(jktToday.year, jktToday.month, jktToday.day, 23, 59, 59, 999).toIso8601String();
+
+      final rows = await _client
+          .from('simulation_logs')
+          .select('image_urls, created_at')
+          .gte('created_at', startUtc)
+          .lte('created_at', endUtc)
+          .eq('user_id', user.id)
+          .limit(2000);
+
+      int used = 0;
+      for (final r in rows as List) {
+        final urls = (r['image_urls'] as List?) ?? const [];
+        final hasImage = urls.any((u) => u is String && (u as String).startsWith('http'));
+        if (hasImage) used++;
+      }
+      return used;
+    }
+  }
+
   Future<int?> remainingLimit() async {
-    final used = await countDistinctSuccessToday();
-    return (kDailyLimit - used).clamp(0, kDailyLimit);
+    final used = await countImageSuccessToday(); // ⬅️ CHANGED: pakai hitung per-GAMBAR
+    final remain = kDailyLimit - used;
+    return remain < 0 ? 0 : remain;
   }
 
   Future<void> _safeLogSimulation(
@@ -239,8 +285,7 @@ class CapsuleService {
         ),
         CapsuleItem(
           title: 'Sumber Terjaga',
-          description:
-              'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
+          description: 'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
         ),
       ];
     } else {
@@ -248,6 +293,7 @@ class CapsuleService {
         CapsuleItem(
           title: 'Lingkungan Rusak',
           description: '$w yang tercecer mencemari sungai, laut, dan tanah.',
+          // header untuk skenario buruk
           fallbackAsset: header,
         ),
         CapsuleItem(
@@ -256,8 +302,7 @@ class CapsuleService {
         ),
         CapsuleItem(
           title: 'Sumber Habis',
-          description:
-              'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
+          description: 'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
         ),
       ];
     }
