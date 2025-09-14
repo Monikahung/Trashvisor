@@ -30,10 +30,13 @@ flutter run
 ## 🛠️ Teknologi yang Digunakan
 - **Flutter** – Framework utama aplikasi.
 - **YOLOv8n** – Training model deteksi jenis sampah.
+- **stabilityai/stable-diffusion-xl-base-1.0** - Model untuk generate gambar.
+- **microsoft/git-base-coco** - Model GIT (Generate Image to Text) untuk validasi video.
 - **Jupyter Notebook** – Aplikasi dalam membuat model AI.
-- **Leaflet.js** – Framework maps.
+- **Google Maps Platform** – API untuk maps lokasi drop-off pembuangan sampah.
 - **Supabase** – Database utama aplikasi.
 - **Hugging Face** – API untuk model AI dan penyimpanan dataset dari pengguna.
+- **OpenAI & Gemini** - API untuk generate teks.
 
 ---
 ## 👥 Tim Pengembang
