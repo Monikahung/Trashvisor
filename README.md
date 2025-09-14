@@ -39,6 +39,12 @@ flutter run
 - **OpenAI & Gemini** - API untuk generate teks.
 
 ---
+
+## 🔗 Link Drive
+https://drive.google.com/drive/folders/1Haqvz1a7fzCUf3zbDT6SsYvVNXsxpYPo?usp=sharing
+
+---
+
 ## 👥 Tim Pengembang
 - **Monika**
 - **Raihan Adi Pratama**
