@@ -188,7 +188,7 @@ class CapsuleService {
       int used = 0;
       for (final r in rows as List) {
         final urls = (r['image_urls'] as List?) ?? const [];
-        final hasImage = urls.any((u) => u is String && (u as String).startsWith('http'));
+        final hasImage = urls.any((u) => u is String && (u).startsWith('http'));
         if (hasImage) used++;
       }
       return used;
@@ -210,7 +210,7 @@ class CapsuleService {
       int used = 0;
       for (final r in rows as List) {
         final urls = (r['image_urls'] as List?) ?? const [];
-        final hasImage = urls.any((u) => u is String && (u as String).startsWith('http'));
+        final hasImage = urls.any((u) => u is String && (u).startsWith('http'));
         if (hasImage) used++;
       }
       return used;
