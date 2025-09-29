@@ -76,7 +76,7 @@ class OnboardingTemplate extends StatelessWidget {
     const Color brandDeepGreen = Color(0xFF294B29); // warna brand untuk teks
 
     // Margin kiri/kanan keseluruhan konten
-    const double sidePadding = 26.0;
+    const double sidePadding = 25.0;
 
     // Geser SELURUH KONTEN (ilustrasi, dots, teks, tombol) ke atas/bawah.
     // NEGATIF = naik; POSITIF = turun.
@@ -90,7 +90,7 @@ class OnboardingTemplate extends StatelessWidget {
     const double imageWidthRatio = 0.25;
 
     // Jarak antara ilustrasi dan dots (harus >= 0; SizedBox tidak boleh negatif).
-    const double gapImageToDots = 10.0;
+    const double gapImageToDots = 15.0;
 
     // Geser Dots ke atas/bawah secara halus.
     // NEGATIF = naik; POSITIF = turun.
@@ -203,9 +203,9 @@ class OnboardingTemplate extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 22,
-                          fontWeight: FontWeight.w900,
+                          fontWeight: FontWeight.w700,
                           color: brandDeepGreen,
-                          fontFamily: 'assets/fonts/nunito/nunito-extrabold.ttf',
+                          fontFamily: 'Nunito',
                         ),
                       ),
 
@@ -217,10 +217,9 @@ class OnboardingTemplate extends StatelessWidget {
                         textAlign: TextAlign.center,
                         style: const TextStyle(
                           fontSize: 14,
-                          fontWeight: FontWeight.w400,
-                          color: Colors.black87,
+                          color: Colors.black,
                           height: 1.5, // line-height agar lebih nyaman dibaca
-                          fontFamily: 'assets/fonts/roboto/roboto-regular.ttf',
+                          fontFamily: 'Roboto',
                         ),
                       ),
 
@@ -271,9 +270,9 @@ class OnboardingTemplate extends StatelessWidget {
                     'Lewati',
                     style: TextStyle(
                       color: brandDeepGreen,
-                      fontWeight: FontWeight.w700,
+                      fontWeight: FontWeight.bold,
                       fontSize: 14,
-                      fontFamily: 'assets/fonts/nunito/nunito-bold.ttf',
+                      fontFamily: 'Nunito',
                     ),
                   ),
                 ),

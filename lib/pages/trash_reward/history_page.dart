@@ -1,65 +1,28 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:intl/date_symbol_data_local.dart';
+import 'package:intl/intl.dart';
+import 'package:intl/date_symbol_data_local.dart'; // >>>> UBAH: pakai lokal ID
 import 'package:trashvisor/core/colors.dart';
-import 'package:timeago/timeago.dart' as timeago;
 import '../../globals.dart'; // routeObserver
 
-// 🔹 Custom messages tanpa "yang lalu"
-class MyCustomMessages implements timeago.LookupMessages {
+class MissionHistoryPage extends StatefulWidget {
+  const MissionHistoryPage({super.key});
+
   @override
-  String prefixAgo() => '';
-  @override
-  String prefixFromNow() => '';
-  @override
-  String suffixAgo() => ''; // hapus "yang lalu"
-  @override
-  String suffixFromNow() => 'dari sekarang';
-  @override
-  String lessThanOneMinute(int seconds) => 'baru saja';
-  @override
-  String aboutAMinute(int minutes) => '1 menit';
-  @override
-  String minutes(int minutes) => '$minutes menit';
-  @override
-  String aboutAnHour(int minutes) => '1 jam';
-  @override
-  String hours(int hours) => '$hours jam';
-  @override
-  String aDay(int hours) => '1 hari';
-  @override
-  String days(int days) => '$days hari';
-  @override
-  String aboutAMonth(int days) => '1 bulan';
-  @override
-  String months(int months) => '$months bulan';
-  @override
-  String aboutAYear(int years) => '1 tahun';
-  @override
-  String years(int years) => '$years tahun';
-  @override
-  String wordSeparator() => ' ';
+  State<MissionHistoryPage> createState() => _MissionHistoryPageState();
 }
 
-class NotificationsPage extends StatefulWidget {
-  const NotificationsPage({super.key});
-
-  @override
-  State<NotificationsPage> createState() => _NotificationsPageState();
-}
-
-class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
+class _MissionHistoryPageState extends State<MissionHistoryPage>
+    with RouteAware {
   final _client = Supabase.instance.client;
 
   bool _loading = true;
-  List<_NotificationRow> _rows = [];
+  List<_HistoryRow> _rows = [];
 
   @override
   void initState() {
     super.initState();
-    // 🔹 register locale Indonesia custom
-    timeago.setLocaleMessages('id_custom', MyCustomMessages());
-
+    // >>>> UBAH: inisialisasi format Indonesia dulu baru load
     initializeDateFormatting('id_ID', null).then((_) => _reload());
   }
 
@@ -77,7 +40,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
 
   @override
   void didPopNext() {
-    _reload(); // refresh otomatis saat kembali
+    _reload(); // refresh otomatis saat kembali ke layar ini
   }
 
   Future<void> _reload() async {
@@ -100,7 +63,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
           .order('created_at', ascending: false)
           .limit(100);
 
-      final result = <_NotificationRow>[];
+      final result = <_HistoryRow>[];
       for (final r in (data as List)) {
         final status = (r['status'] ?? '').toString();
         final created = DateTime.tryParse(r['created_at']?.toString() ?? '');
@@ -108,14 +71,14 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
 
         if (status.contains(':')) {
           final idx = status.indexOf(':');
-          result.add(_NotificationRow(
+          result.add(_HistoryRow(
             state: status.substring(0, idx),
             key: status.substring(idx + 1),
             createdAt: created,
             missionDate: missionDate,
           ));
         } else {
-          result.add(_NotificationRow(
+          result.add(_HistoryRow(
             state: status,
             key: '',
             createdAt: created,
@@ -130,7 +93,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
       });
     } catch (e) {
       setState(() => _loading = false);
-      debugPrint('load notifications error: $e');
+      debugPrint('load history error: $e');
     }
   }
 
@@ -142,7 +105,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
 
         return WillPopScope(
           onWillPop: () async {
-            Navigator.pop(context, true);
+            Navigator.pop(context, true); // beri sinyal ke parent
             return false;
           },
           child: Scaffold(
@@ -154,7 +117,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
                 elevation: 0,
                 centerTitle: true,
                 title: Text(
-                  'Notifikasi',
+                  'Riwayat',
                   style: TextStyle(
                     color: AppColors.fernGreen,
                     fontFamily: 'Nunito',
@@ -192,7 +155,7 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
                             SizedBox(height: 20 * k),
                             Center(
                               child: Text(
-                                'Belum ada notifikasi',
+                                'Belum ada riwayat',
                                 style: TextStyle(
                                   color: AppColors.whiteSmoke,
                                   fontSize: 16 * k,
@@ -205,10 +168,8 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
                       : ListView.builder(
                           padding: EdgeInsets.all(16 * k),
                           itemCount: _rows.length,
-                          itemBuilder: (context, i) => _NotificationTile(
-                            row: _rows[i],
-                            sizeRatio: k,
-                          ),
+                          itemBuilder: (context, i) =>
+                              _HistoryTile(row: _rows[i], sizeRatio: k),
                         ),
             ),
           ),
@@ -218,13 +179,13 @@ class _NotificationsPageState extends State<NotificationsPage> with RouteAware {
   }
 }
 
-class _NotificationRow {
-  final String state;
-  final String key;
+class _HistoryRow {
+  final String state;      // processing/completed/claimed/failed/...
+  final String key;        // checkin/record_paper/...
   final DateTime? createdAt;
   final String? missionDate;
 
-  _NotificationRow({
+  _HistoryRow({
     required this.state,
     required this.key,
     required this.createdAt,
@@ -232,19 +193,19 @@ class _NotificationRow {
   });
 }
 
-class _NotificationTile extends StatelessWidget {
-  final _NotificationRow row;
+class _HistoryTile extends StatelessWidget {
+  final _HistoryRow row;
   final double sizeRatio;
 
-  const _NotificationTile({required this.row, required this.sizeRatio});
+  const _HistoryTile({required this.row, required this.sizeRatio});
 
   @override
   Widget build(BuildContext context) {
     final s = row.state.toLowerCase();
     final icon = _iconForState(s);
+    final badgeColor = _badgeColorForState(s);
     final title = _titleFor(row);
-    final subtitle = _subtitleFor(row);
-    final when = _formatWhen(row);
+    final when = _formatWhen(row); // >>>> UBAH: hari + tanggal (ID) + jam
 
     return Container(
       margin: EdgeInsets.only(bottom: 10 * sizeRatio),
@@ -259,11 +220,10 @@ class _NotificationTile extends StatelessWidget {
           Container(
             padding: EdgeInsets.all(10 * sizeRatio),
             decoration: BoxDecoration(
-              color: AppColors.avocadoGreen,
+              color: badgeColor,
               borderRadius: BorderRadius.circular(50 * sizeRatio),
             ),
-            child: Icon(icon,
-                color: AppColors.lightSageGreen, size: 24 * sizeRatio),
+            child: Icon(icon, color: AppColors.whiteSmoke, size: 24 * sizeRatio),
           ),
           SizedBox(width: 15 * sizeRatio),
           Expanded(
@@ -279,9 +239,9 @@ class _NotificationTile extends StatelessWidget {
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                SizedBox(height: 5 * sizeRatio),
+                SizedBox(height: 6 * sizeRatio),
                 Text(
-                  subtitle,
+                  when,
                   style: TextStyle(
                     fontFamily: 'Roboto',
                     color: AppColors.fernGreen,
@@ -291,48 +251,48 @@ class _NotificationTile extends StatelessWidget {
               ],
             ),
           ),
-          Padding(
-            padding: EdgeInsets.only(left: 4.0 * sizeRatio),
-            child: Text(
-              when,
-              textAlign: TextAlign.right,
-              style: TextStyle(
-                fontFamily: 'Roboto',
-                color: AppColors.fernGreen,
-                fontSize: 12 * sizeRatio,
-              ),
-            ),
-          ),
         ],
       ),
     );
   }
 
-  String _formatWhen(_NotificationRow r) {
+  // >>>> UBAH: prioritas pakai mission_date untuk hari/tanggal; createdAt untuk jam
+  String _formatWhen(_HistoryRow r) {
+    // mission_date → hari + tanggal
+    if (r.missionDate != null && r.missionDate!.isNotEmpty) {
+      final parsed = DateTime.tryParse(r.missionDate!) ??
+          DateTime.tryParse('${r.missionDate!}T00:00:00Z');
+      if (parsed != null) {
+        final d = parsed.toLocal();
+        final hari = DateFormat('EEEE', 'id_ID').format(d);
+        final tgl = DateFormat('dd MMM yyyy', 'id_ID').format(d);
+        // jika ada createdAt, tampilkan jamnya
+        if (r.createdAt != null) {
+          final jam = DateFormat('HH:mm', 'id_ID').format(r.createdAt!.toLocal());
+          return '$hari, $tgl • $jam';
+        }
+        return '$hari, $tgl';
+      }
+    }
+    // fallback: createdAt saja
     if (r.createdAt != null) {
-      return timeago.format(r.createdAt!.toLocal(), locale: 'id_custom');
+      final d = r.createdAt!.toLocal();
+      final hari = DateFormat('EEEE', 'id_ID').format(d);
+      final tgl = DateFormat('dd MMM yyyy', 'id_ID').format(d);
+      final jam = DateFormat('HH:mm', 'id_ID').format(d);
+      return '$hari, $tgl • $jam';
     }
     return '-';
   }
 
-  String _titleFor(_NotificationRow r) {
+  String _titleFor(_HistoryRow r) {
     final label = _labelForKey(r.key);
     switch (r.state.toLowerCase()) {
-      case 'processing': return 'Sedang divalidasi — $label';
-      case 'completed': return 'Validasi selesai — $label';
+      case 'processing': return 'Validasi sedang diproses — $label';
+      case 'completed': return 'Validasi selesai (siap klaim) — $label';
       case 'claimed':   return 'Poin berhasil diklaim — $label';
-      case 'failed':    return 'Validasi gagal — $label';
+      case 'failed':    return 'Validasi gagal (silakan ulangi) — $label';
       default:          return '${r.state} — $label';
-    }
-  }
-
-  String _subtitleFor(_NotificationRow r) {
-    switch (r.state.toLowerCase()) {
-      case 'processing': return 'Tunggu beberapa saat, data kamu sedang diperiksa';
-      case 'completed':  return 'Misi selesai dan siap klaim poin';
-      case 'claimed':    return 'Poin sudah masuk ke akunmu';
-      case 'failed':     return 'Silakan coba ulangi misi ini';
-      default:           return '';
     }
   }
 
@@ -353,7 +313,17 @@ class _NotificationTile extends StatelessWidget {
       case 'completed':  return Icons.verified_outlined;
       case 'claimed':    return Icons.monetization_on_outlined;
       case 'failed':     return Icons.error_outline;
-      default:           return Icons.notifications;
+      default:           return Icons.history;
+    }
+  }
+
+  Color _badgeColorForState(String s) {
+    switch (s) {
+      case 'processing': return AppColors.avocadoGreen;
+      case 'completed':  return AppColors.fernGreen;
+      case 'claimed':    return AppColors.rewardGold;
+      case 'failed':     return Colors.red;
+      default:           return AppColors.darkMossGreen;
     }
   }
 }

@@ -1,15 +1,16 @@
-# Trashvisor - Smart Waste Sorting and Sustainable Actions with AI
+# Trashvisor - Smart Waste Education and Organizational Transformation with AI
 
-Trashvisor adalah aplikasi android berbasis Flutter yang membantu masyarakat memilah sampah dengan kecerdasan buatan (AI) serta memberikan edukasi tentang aksi berkelanjutan.
-Aplikasi ini dikembangkan dalam rangka mendukung gaya hidup ramah lingkungan dan pengelolaan sampah yang lebih cerdas.  
+Trashvisor adalah aplikasi android berbasis Flutter yang membantu masyarakat, sekolah, dan organisasi untuk belajar memilah sampah dengan kecerdasan buatan (AI) serta menerapkan aksi berkelanjutan dalam kehidupan sehari-hari.
+
+Aplikasi ini dikembangkan untuk mendukung transformasi pendidikan lingkungan dan penguatan organisasi melalui inovasi teknologi yang interaktif, kolaboratif, dan berkelanjutan.
 
 ---
 
 ## ✨ Fitur Utama
-- 🔍 **Trash Vision** – Menggunakan Computer Vision (YOLO) untuk mendeteksi jenis sampah, seperti anorganik kertas, B3 baterai, organik daun, dll.
+- 🔍 **Trash Vision** – Menggunakan Computer Vision (YOLO) untuk mendeteksi jenis sampah sekaligus memberikan penjelasan edukatif berbasis AI yang mudah dipahami.
 - 🗑️ **Trash Location** – Menampilkan lokasi pembuangan atau daur ulang sampah terdekat.
 - 📊 **Trash Reward** – Gamifikasi inovatif berbasis poin dan level untuk mengajarkan konsistensi dalam melakukan kebiasaan baik terhadap sampah.
-- 🗺️ **Trash Chatbot** – Menggunakan NLP untuk memberikan edukasi terhadap pengguna terkait sampah dengan memberikan jawaban yang relevan 
+- 🗺️ **Trash Chatbot** – Menggunakan NLP untuk memberikan edukasi terhadap pengguna terkait sampah dengan memberikan jawaban yang relevan.
 - 🔔 **Trash Capsule** – Menampilkan dampak baik maupun buruk dari pengelolaan sampah yang dipilih pengguna supaya dapat menggerakkan pengguna agar terus berbuat baik dalam pengelolaan sampah.
 
 ---
@@ -23,7 +24,7 @@ cd trashvisor
 flutter pub get
 - **Jalankan aplikasi**
 flutter run
-- **Note: Sedang proses pengembangan. Apabila sudah selesai, maka akan ada file apk yang bisa langsung diinstall di ponsel Android**
+- **Note: Terdapat beberapa file yang bersifat secret sehingga tidak tercantum di dalam repositori. Lengkapnya ada di dalam Google Drive.**
 
 ---
 
@@ -52,4 +53,4 @@ https://drive.google.com/drive/folders/1Haqvz1a7fzCUf3zbDT6SsYvVNXsxpYPo?usp=sha
 
 ---
 
-## 📜 by Trashvisor Team - SFT 2025
+## 📜 by Trashvisor Team - TECHSPIRION AI

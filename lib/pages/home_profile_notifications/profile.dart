@@ -3,7 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:trashvisor/core/colors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:camera/camera.dart';
-import 'package:trashvisor/pages/loginandregister/login.dart' show LoginPage;
+import 'package:trashvisor/pages/login_and_register/login.dart' show LoginPage;
 
 // >>> UBAH: daftar key misi scan (dipakai untuk hitung 5 tugas/hari)
 const Set<String> _scanKeys = {
@@ -440,7 +440,7 @@ class _ProfilePageState extends State<ProfilePage>
         child: Container(
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: AssetImage('assets/images/bg_profile.jpg'),
+              image: AssetImage('assets/images/home_and_profile/top_profile.jpg'),
               fit: BoxFit.contain,
               alignment: Alignment.topCenter,
             ),
@@ -734,7 +734,7 @@ class _ProfilePageState extends State<ProfilePage>
                   child: Center(
                     child: CircularProgressIndicator(
                       color: AppColors.whiteSmoke,
-                      strokeWidth: 2.2,
+                      strokeWidth: 2,
                     ),
                   ),
                 );

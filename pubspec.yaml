@@ -46,11 +46,12 @@ flutter:
   assets:
     - .env
     - assets/images/
+    - assets/images/bg/
     - assets/images/onboarding/
     - assets/images/sponsors/
-    - assets/illustrations/
-    - assets/bg/
-    - assets/fonts/
+    - assets/images/login_and_register/
+    - assets/images/home_and_profile/
+    - assets/images/features/
     - assets/fonts/
   
   fonts:

@@ -6,13 +6,13 @@ import 'package:intl/intl.dart'; // untuk format 1.000
 import 'package:supabase_flutter/supabase_flutter.dart'; // 🔴 PENTING: ambil score dari DB
 
 import 'package:trashvisor/core/colors.dart';
-import 'package:trashvisor/pages/trashreward/trashreward_page.dart';
+import 'package:trashvisor/pages/trash_reward/trashreward_page.dart';
 import 'profile.dart';
 import 'notifications.dart';
-import '../trashvision/scan_camera.dart';
-import '../trashchatbot/chatbot.dart';
-import '../trashcapsule/capsule.dart';
-import '../trashlocation/location_page.dart';
+import '../trash_vision/scan_camera.dart';
+import '../trash_chatbot/chatbot.dart';
+import '../trash_capsule/capsule.dart';
+import '../trash_location/location_page.dart';
 
 // HomePage diubah menjadi StatefulWidget
 class HomePage extends StatefulWidget {
@@ -161,7 +161,7 @@ class _HomePageState extends State<HomePage> {
           height: 200,
           decoration: const BoxDecoration(
             image: DecorationImage(
-              image: AssetImage('assets/images/bg_home.jpg'),
+              image: AssetImage('assets/images/home_and_profile/top_home.jpg'),
               fit: BoxFit.cover,
             ),
           ),

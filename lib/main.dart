@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:trashvisor/pages/onboarding/onboarding_page.dart';
 import 'package:trashvisor/pages/home_profile_notifications/home.dart';
-import 'package:trashvisor/pages/loginandregister/login.dart';
+import 'package:trashvisor/pages/login_and_register/first_login_and_register.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -23,9 +23,10 @@ const double kBottomPadding =
     30; // Semakin besar, bisa buat logo sponsor dengan teks nya agak lebih keatas mendekat logo utama
 const double kSponsorLogoSpacing = 40;
 const double kTitleFontSize = 28;
-const double kDidukungFontSize = 12;
+const double kDidukungFontSize = 14;
 const double kSpacerAfterDidukung = 25;
 const Color kTrashvisorTitleColor = Color(0xFF2C5E2B);
+const Color fernGreen = Color(0xFF528123);
 
 /// Penjelasan singkat konstanta:
 /// - kLogoHeight: tinggi logo utama pada splash. Turunkan/naikkan untuk skala visual.
@@ -79,11 +80,16 @@ class MyApp extends StatelessWidget {
         textTheme: TextTheme(
           headlineLarge: TextStyle(
             fontSize: kTitleFontSize,
-            fontWeight: FontWeight.w600,
+            fontWeight: FontWeight.bold,
             color: kTrashvisorTitleColor,
             letterSpacing: 0.2,
+            fontFamily: 'Nunito',
           ),
-          bodySmall: const TextStyle(fontSize: kDidukungFontSize),
+          bodySmall: const TextStyle(
+            fontSize: kDidukungFontSize,
+            color: Colors.black,
+            fontFamily: 'Roboto',
+          ),
         ),
       ),
       // ========================================
@@ -101,7 +107,7 @@ class MyApp extends StatelessWidget {
           // Tampilkan loading saat menunggu ketersediaan kamera.
           if (snapshot.connectionState == ConnectionState.waiting) {
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(child: CircularProgressIndicator(color: fernGreen)),
             );
           } else if (snapshot.hasError) {
             // Jika error mengambil kamera, tampilkan pesan error agar mudah debug.
@@ -155,10 +161,10 @@ class _SplashScreenState extends State<_SplashScreen> {
   // Daftar aset onboarding yang ingin dicache untuk transisi mulus.
   // Jika menambah slide onboarding, tambahkan path file di list ini.
   static const _onboardingAssets = <String>[
-    'assets/images/onboarding/onboarding1.png',
-    'assets/images/onboarding/onboarding2.png',
-    'assets/images/onboarding/onboarding3.png',
-    'assets/images/onboarding/onboarding4.png',
+    'assets/images/onboarding/onboarding.png',
+    'assets/images/onboarding/onboarding_2.png',
+    'assets/images/onboarding/onboarding_3.png',
+    'assets/images/onboarding/onboarding_4.png',
   ];
 
   @override
@@ -204,9 +210,9 @@ class _SplashScreenState extends State<_SplashScreen> {
       if (!mounted) return;
 
       if (onboardingComplete) {
-        // Navigasi ke LoginPage
+        // Navigasi ke Masuk/Daftar
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
+          MaterialPageRoute(builder: (_) => LoginRegisterPage(cameras: widget.cameras)),
         );
       } else {
         // Navigasi ke OnBoardingPage
@@ -272,8 +278,6 @@ class _SplashScreenState extends State<_SplashScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
-            _SponsorLogo('assets/images/sponsors/skilvuv_logo.png'),
-            SizedBox(width: kSponsorLogoSpacing),
             _SponsorLogo('assets/images/sponsors/polman_logo.png'),
             SizedBox(width: kSponsorLogoSpacing),
             _SponsorLogo('assets/images/sponsors/team_logo.png'),
