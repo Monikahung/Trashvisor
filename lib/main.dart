@@ -278,6 +278,8 @@ class _SplashScreenState extends State<_SplashScreen> {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: const [
+            _SponsorLogo('assets/images/sponsors/itfest_logo.png'),
+            SizedBox(width: kSponsorLogoSpacing),
             _SponsorLogo('assets/images/sponsors/polman_logo.png'),
             SizedBox(width: kSponsorLogoSpacing),
             _SponsorLogo('assets/images/sponsors/team_logo.png'),

@@ -3,8 +3,8 @@
 // UI gabungan Trash Capsule (tanpa search), dipanggil dari ResultScan.
 // Layout:
 // - Semua judul/teks left-aligned.
-// - Padding horizontal 16 (lebih lebar).
-// - Gambar header 1:1 & kartu narasi tidak “mengecil”.
+// - Padding horizontal 24 (mengikuti gaya HandlingTrash).
+// - Gambar header 1:1 & kartu narasi tidak "mengecil".
 // - Tombol aksi (Baik/Buruk) full width area konten.
 // State UX:
 // - Panah ▼ default; saat dipilih jadi ▲; tap lagi tombol yang sama -> deselect & balik ke placeholder.
@@ -55,7 +55,9 @@ void showTopToast(
               decoration: BoxDecoration(
                 color: backgroundColor,
                 borderRadius: BorderRadius.circular(12),
-                boxShadow: const [BoxShadow(blurRadius: 12, color: Colors.black26)],
+                boxShadow: const [
+                  BoxShadow(blurRadius: 12, color: Colors.black26),
+                ],
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
@@ -95,28 +97,48 @@ void showTopToast(
 class SquareHeaderImage extends StatelessWidget {
   final String? imageUrl;
   final String fallbackAsset;
-  const SquareHeaderImage({super.key, required this.imageUrl, required this.fallbackAsset});
+
+  const SquareHeaderImage({
+    super.key,
+    required this.imageUrl,
+    required this.fallbackAsset,
+  });
 
   @override
   Widget build(BuildContext context) {
-    final Widget img = (imageUrl != null && imageUrl!.isNotEmpty)
-        ? Image.network(imageUrl!, fit: BoxFit.contain)
-        : Image.asset(fallbackAsset, fit: BoxFit.contain);
+    final String? url = (imageUrl != null && imageUrl!.isNotEmpty) ? imageUrl : null;
 
     return Padding(
-      // 🔧 Lebar konten (ganti 16 jika ingin lebih mepet/lega)
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: AspectRatio(
-        aspectRatio: 1, // benar-benar kotak
-        child: Container(
-          decoration: BoxDecoration(
-            color: const Color(0xFFE8F5E9),
-            // 🔧 Radius kartu gambar
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.fernGreen, width: 1),
-          ),
-          clipBehavior: Clip.antiAlias,
-          child: img, // tidak di-Center agar tidak ada padding ekstra
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: url != null
+                  ? Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    )
+                  : Image.asset(
+                      fallbackAsset,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+            ),
+            Container(
+              width: double.infinity,
+              height: double.infinity,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.fernGreen, width: 1),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -139,7 +161,7 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   final _service = CapsuleService();
 
   CapsuleScenario? _selected; // good/bad (null = belum dipilih)
-  CapsuleResult? _result;     // hasil generate dari server
+  CapsuleResult? _result; // hasil generate dari server
   bool _loading = false;
 
   // ✅ TAMPILKAN TOAST PENGINGAT SEKALI SAAT MASUK HALAMAN
@@ -151,7 +173,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
       // 🔧 Ubah pesan/durasi/ikon di sini kalau mau
       showTopToast(
         context,
-        message: 'Pilih “Penanganan Baik” atau “Penanganan Buruk” untuk melihat dampaknya.',
+        message:
+            'Pilih "Penanganan Baik" atau "Penanganan Buruk" untuk melihat dampaknya.',
         icon: Icons.touch_app_outlined,
         duration: const Duration(seconds: 3),
         extraTop: 18,
@@ -160,14 +183,15 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     });
   }
 
-  // === Helper: selalu sediakan 3 narasi walau server gagal === 
+  // === Helper: selalu sediakan 3 narasi walau server gagal ===
   List<CapsuleItem> _fallbackItems(String waste, {required bool good}) {
     final w = waste.isEmpty ? 'sampah' : waste.toLowerCase();
     if (good) {
       return [
         CapsuleItem(
           title: 'Lingkungan Sehat',
-          description: 'Pengelolaan $w yang benar menjaga sungai, laut, dan tanah tetap bersih.',
+          description:
+              'Pengelolaan $w yang benar menjaga sungai, laut, dan tanah tetap bersih.',
           fallbackAsset: 'assets/images/features/true_capsule.png',
         ),
         CapsuleItem(
@@ -177,7 +201,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
         ),
         CapsuleItem(
           title: 'Sumber Terjaga',
-          description: 'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
+          description:
+              'Pemilahan & daur ulang $w membantu melestarikan sumber daya alam.',
           fallbackAsset: 'assets/images/features/true_capsule_3.png',
         ),
       ];
@@ -195,7 +220,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
         ),
         CapsuleItem(
           title: 'Sumber Habis',
-          description: 'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
+          description:
+              'Produksi $w baru tanpa daur ulang menguras sumber daya alam.',
           fallbackAsset: 'assets/images/features/false_capsule_3.png',
         ),
       ];
@@ -206,7 +232,10 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     if (_selected == null) return const <CapsuleItem>[];
     final list = _result?.items ?? const <CapsuleItem>[];
     if (list.isNotEmpty) return list;
-    return _fallbackItems(widget.wasteType.trim(), good: _selected == CapsuleScenario.good);
+    return _fallbackItems(
+      widget.wasteType.trim(),
+      good: _selected == CapsuleScenario.good,
+    );
   }
 
   Future<void> _generate(CapsuleScenario s) async {
@@ -228,11 +257,13 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
 
     // ============= NOTIF (Toast) =============
     final items = _itemsForUI(); // narasi pasti tersedia
-    final hasImage = items.isNotEmpty && (items.first.imageUrl?.isNotEmpty == true);
+    final hasImage =
+        items.isNotEmpty && (items.first.imageUrl?.isNotEmpty == true);
 
     final err = (_result?.errorMessage ?? '').toLowerCase();
     final limitBlockedNoImage =
-        (err.contains('limit harian') || err.contains('limit tercapai')) && !hasImage;
+        (err.contains('limit harian') || err.contains('limit tercapai')) &&
+        !hasImage;
 
     final remain = await _service.remainingLimit();
     if (!mounted) return;
@@ -249,7 +280,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     } else if (hasImage) {
       showTopToast(
         context,
-        message: 'Berhasil! Gambar + narasi dibuat. Sisa limit ${remain ?? '-'} / $kDailyLimit',
+        message:
+            'Berhasil! Gambar + narasi dibuat. Sisa limit ${remain ?? '-'} / $kDailyLimit',
         backgroundColor: const Color(0xFF34A853),
         icon: Icons.check_circle_outline,
         extraTop: 52,
@@ -257,7 +289,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     } else if (items.isNotEmpty) {
       showTopToast(
         context,
-        message: 'Narasi berhasil, gambar gagal. Sisa limit tetap ${remain ?? '-'} / $kDailyLimit',
+        message:
+            'Narasi berhasil, gambar gagal. Sisa limit tetap ${remain ?? '-'} / $kDailyLimit',
         backgroundColor: const Color(0xFFFFC107),
         icon: Icons.info_outline,
         extraTop: 52,
@@ -276,6 +309,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   /// Header hero (pakai bg khusus Trash Capsule)
   Widget _heroHeader(BuildContext context) {
     final Size screenSize = MediaQuery.of(context).size;
+    final double statusBarHeight = MediaQuery.of(context).padding.top;
+
     return Stack(
       children: [
         Container(
@@ -311,7 +346,11 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
           ),
         ),
         Positioned(
-          top: screenSize.height * 0.06,
+          // =========================================================
+          // 🔧 PERUBAHAN UTAMA: Sesuaikan posisi Top dengan tinggi Status Bar
+          // (Tambahkan 10 sebagai margin di bawah Status Bar)
+          // =========================================================
+          top: statusBarHeight + 10,
           left: 20,
           child: GestureDetector(
             onTap: () => Navigator.pop(context), // kembali ke ResultScan
@@ -321,8 +360,11 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
                 color: AppColors.fernGreen,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.arrow_back_ios_new,
-                  color: AppColors.whiteSmoke, size: 20),
+              child: const Icon(
+                Icons.arrow_back_ios_new,
+                color: AppColors.whiteSmoke,
+                size: 20,
+              ),
             ),
           ),
         ),
@@ -331,28 +373,29 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   }
 
   Widget _sectionTitle(String text) => Padding(
-        // 🔧 Padding horizontal konten
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Text(
-          text,
-          textAlign: TextAlign.left,
-          style: const TextStyle(
-            fontSize: 22,
-            fontFamily: 'Nunito',
-            fontWeight: FontWeight.bold,
-            color: AppColors.darkMossGreen,
-          ),
-        ),
-      );
+    // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
+    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    child: Text(
+      text,
+      textAlign: TextAlign.left,
+      style: const TextStyle(
+        fontSize: 22,
+        fontFamily: 'Nunito',
+        fontWeight: FontWeight.bold,
+        color: AppColors.darkMossGreen,
+      ),
+    ),
+  );
 
   Widget _divider() => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16.0),
-        child: Container(
-          height: 1,
-          width: double.infinity,
-          color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
-        ),
-      );
+    // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
+    padding: const EdgeInsets.symmetric(horizontal: 24.0),
+    child: Container(
+      height: 1,
+      width: double.infinity,
+      color: AppColors.darkMossGreen.withAlpha((255 * 0.5).round()),
+    ),
+  );
 
   /// ===============================
   /// Tombol Aksi (Baik / Buruk)
@@ -363,7 +406,7 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
       required IconData icon,
       required String label,
       required Color color,
-      required bool selected,          // status terpilih
+      required bool selected, // status terpilih
       required VoidCallback onTap,
     }) {
       return GestureDetector(
@@ -406,7 +449,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     }
 
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
         children: [
           Expanded(
@@ -419,8 +463,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
                 // toggle behavior
                 if (_selected == CapsuleScenario.good) {
                   setState(() {
-                    _selected = null;   // deselect
-                    _result = null;     // bersihkan hasil
+                    _selected = null; // deselect
+                    _result = null; // bersihkan hasil
                     _loading = false;
                   });
                 } else {
@@ -440,8 +484,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
                 // toggle behavior
                 if (_selected == CapsuleScenario.bad) {
                   setState(() {
-                    _selected = null;   // deselect
-                    _result = null;     // bersihkan hasil
+                    _selected = null; // deselect
+                    _result = null; // bersihkan hasil
                     _loading = false;
                   });
                 } else {
@@ -458,10 +502,11 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   Widget _narrativeCard(CapsuleItem item) {
     return Container(
       // 🔧 Padding isi kartu narasi
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+      padding: const EdgeInsets.all(20), // Disesuaikan agar mirip HandlingTrash
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: const Color(0xFFE8F5E9),
+        // 🔧 Menggunakan warna alpha yang lebih tebal agar mirip HandlingTrash
+        color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.fernGreen, width: 1),
       ),
@@ -472,7 +517,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
             item.title,
             textAlign: TextAlign.left,
             style: const TextStyle(
-              fontSize: 20,
+              // 🔧 Font size disesuaikan agar mirip HandlingTrash
+              fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppColors.darkMossGreen,
               fontFamily: 'Nunito',
@@ -481,9 +527,11 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
           const SizedBox(height: 8),
           Text(
             item.description,
-            textAlign: TextAlign.left,
+            textAlign:
+                TextAlign.left, // Dibiarkan left-aligned sesuai instruksi
             style: const TextStyle(
-              fontSize: 16,
+              // 🔧 Font size disesuaikan agar mirip HandlingTrash
+              fontSize: 14,
               color: Colors.black,
               fontFamily: 'Roboto',
               height: 1.45,
@@ -504,13 +552,15 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
         ? 'assets/images/features/true_capsule.png'
         : 'assets/images/features/false_capsule.png';
 
+    // Menggunakan SquareHeaderImage yang sudah memiliki padding 24
     if (url != null && url.isNotEmpty) {
       return SquareHeaderImage(imageUrl: url, fallbackAsset: fallback);
     }
 
     // Pakai fallback, tapi "cover" agar terasa full
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: AspectRatio(
         aspectRatio: 1,
         child: Stack(
@@ -540,11 +590,13 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
 
   Widget _impactPlaceholder() {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16.0),
+      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: const Color(0xFFE8F5E9),
+          // 🔧 Menggunakan warna alpha yang lebih tebal agar mirip HandlingTrash
+          color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.fernGreen, width: 1),
         ),
@@ -554,8 +606,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
             ClipOval(
               child: Image.asset(
                 'assets/images/features/capsule_earth.png',
-                width: 80,
-                height: 80,
+                width: 75,
+                height: 75,
                 fit: BoxFit.cover,
               ),
             ),
@@ -569,7 +621,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
                   fontWeight: FontWeight.bold,
                   color: AppColors.darkMossGreen,
                   fontFamily: 'Nunito',
-                  height: 1.4,
                 ),
               ),
             ),
@@ -588,112 +639,114 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
 
     return Scaffold(
       backgroundColor: AppColors.whiteSmoke,
-      body: SafeArea(
-        child: SingleChildScrollView(
-          // Kolom konten selalu left-aligned
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _heroHeader(context),
+      body: SingleChildScrollView(
+        // Kolom konten selalu left-aligned
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _heroHeader(context),
+            // Jarak tambahan untuk memisahkan header dan konten
+            const SizedBox(height: 20),
 
-              // ===== Konten =====
-              Padding(
-                // 🔧 Padding horizontal global konten
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Trash Capsule',
-                      textAlign: TextAlign.left,
-                      style: TextStyle(
-                        fontFamily: 'Nunito',
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.darkMossGreen,
-                      ),
+            // ===== Konten =====
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Trash Capsule',
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontFamily: 'Nunito',
+                      fontSize: 22, // Disesuaikan dari 24 ke 22
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.darkMossGreen,
                     ),
-                    const SizedBox(height: 6),
-                    Text(
-                      desc,
-                      textAlign: TextAlign.left,
-                      style: const TextStyle(
-                        fontFamily: 'Roboto',
-                        fontSize: 15,
-                        color: Colors.black,
-                        height: 1.45,
-                      ),
+                  ),
+                  const SizedBox(height: 8), // Disesuaikan dari 6 ke 8
+                  Text(
+                    desc,
+                    textAlign: TextAlign.left,
+                    style: const TextStyle(
+                      fontFamily: 'Roboto',
+                      fontSize: 14, // Disesuaikan dari 15 ke 14
+                      color: Colors.black,
+                      height: 1.45,
                     ),
-                  ],
-                ),
-              ),
-
-              _divider(),
-              const SizedBox(height: 16),
-
-              _sectionTitle('Pilih Tindak Penanganan'),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text(
-                  'Tentukan tindakan untuk "$waste".',
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontFamily: 'Roboto',
-                    fontSize: 15,
-                    color: Colors.black,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              _actionButtons(),
-              const SizedBox(height: 24),
-
-              _divider(),
-              const SizedBox(height: 24),
-
-              _sectionTitle('Dampak di Masa Depan'),
-              const SizedBox(height: 8),
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                child: Text(
-                  _selected == null
-                      ? 'Dampak akan ditampilkan setelah kamu memilih "Penanganan Baik" atau "Penanganan Buruk".'
-                      : (_selected == CapsuleScenario.good
-                          ? 'Penanganan sampah yang benar akan menjaga kelestarian bumi.'
-                          : 'Penanganan sampah yang buruk akan berakibat fatal bagi masa depan bumi.'),
-                  textAlign: TextAlign.left,
-                  style: const TextStyle(
-                    fontFamily: 'Roboto',
-                    fontSize: 15,
-                    color: Colors.black,
-                    height: 1.45,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              if (_loading)
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.only(top: 12),
-                    child: CircularProgressIndicator(color: AppColors.fernGreen),
-                  ),
-                )
-              else ...[
-                if (_selected == null) _impactPlaceholder() else ...[
-                  _headerImage(),
-                  const SizedBox(height: 16),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: Column(children: items.map(_narrativeCard).toList()),
                   ),
                 ],
-              ],
+              ),
+            ),
 
-              const SizedBox(height: 30),
+            const SizedBox(height: 24),
+            _divider(),
+            const SizedBox(height: 24),
+
+            _sectionTitle('Pilih Tindak Penanganan'),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text(
+                'Tentukan tindakan untuk "$waste".',
+                textAlign: TextAlign.left,
+                style: const TextStyle(
+                  fontFamily: 'Roboto',
+                  fontSize: 14,
+                  color: Colors.black,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            _actionButtons(),
+            const SizedBox(height: 24),
+
+            _divider(),
+            const SizedBox(height: 24),
+
+            _sectionTitle('Dampak di Masa Depan'),
+            const SizedBox(height: 8),
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 24.0),
+              child: Text(
+                _selected == null
+                    ? 'Dampak akan ditampilkan setelah kamu memilih "Penanganan Baik" atau "Penanganan Buruk".'
+                    : (_selected == CapsuleScenario.good
+                          ? 'Penanganan sampah yang benar akan menjaga kelestarian bumi.'
+                          : 'Penanganan sampah yang buruk akan berakibat fatal bagi masa depan bumi.'),
+                textAlign: TextAlign.left,
+                style: const TextStyle(
+                  fontFamily: 'Roboto',
+                  fontSize: 14,
+                  color: Colors.black,
+                  height: 1.45,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            if (_loading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.only(top: 12),
+                  child: CircularProgressIndicator(color: AppColors.fernGreen),
+                ),
+              )
+            else ...[
+              if (_selected == null)
+                _impactPlaceholder()
+              else ...[
+                _headerImage(),
+                const SizedBox(height: 16),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                  child: Column(children: items.map(_narrativeCard).toList()),
+                ),
+              ],
             ],
-          ),
+
+            const SizedBox(height: 24),
+          ],
         ),
       ),
     );

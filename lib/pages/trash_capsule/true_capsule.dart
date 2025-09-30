@@ -372,3 +372,52 @@ class _ActionButtonsSection extends StatelessWidget {
     );
   }
 }
+
+class SquareHeaderImage extends StatelessWidget {
+  final String? imageUrl;
+  final String fallbackAsset;
+
+  const SquareHeaderImage({
+    super.key,
+    required this.imageUrl,
+    required this.fallbackAsset,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final String? url = (imageUrl != null && imageUrl!.isNotEmpty) ? imageUrl : null;
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 24.0),
+      child: AspectRatio(
+        aspectRatio: 1,
+        child: Stack(
+          children: [
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: url != null
+                  ? Image.network(
+                      url,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    )
+                  : Image.asset(
+                      fallbackAsset,
+                      fit: BoxFit.cover,
+                      width: double.infinity,
+                      height: double.infinity,
+                    ),
+            ),
+            Container(
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.fernGreen, width: 1),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
