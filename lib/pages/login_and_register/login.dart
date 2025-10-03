@@ -189,6 +189,12 @@ class _LoginPageState extends State<LoginPage>
   @override
   void initState() {
     super.initState();
+
+    _verificationHandled = false;
+    _resendEmail = null;
+    _isResending = false;
+    _isHourlyRateLimited = false;
+    
     if (!widget.ignoreDeepLink) {
       _initUniLinks(); // Panggil fungsi yang mengaktifkan listener stream/initial link
     }
@@ -278,9 +284,11 @@ class _LoginPageState extends State<LoginPage>
     final OverlayState? overlay = navigatorKey.currentState?.overlay;
 
     if (overlay == null) {
-        // Fallback safety check jika Overlay belum siap (walaupun jarang terjadi)
-        debugPrint('ERROR: OverlayState tidak ditemukan. Gagal menampilkan banner.');
-        return;
+      // Fallback safety check jika Overlay belum siap (walaupun jarang terjadi)
+      debugPrint(
+        'ERROR: OverlayState tidak ditemukan. Gagal menampilkan banner.',
+      );
+      return;
     }
 
     _bannerTimer?.cancel(); // reset timer (kalau ada banner yang masih jalan)
@@ -354,7 +362,7 @@ class _LoginPageState extends State<LoginPage>
         },
       );
       // Masukkan overlay ke atas layar
-      Overlay.of(context).insert(_bannerEntry!);
+      overlay.insert(_bannerEntry!);
     } else {
       // Overlay sudah ada → minta rebuild agar pesan terbarui
       _bannerEntry!.markNeedsBuild();
@@ -439,12 +447,11 @@ class _LoginPageState extends State<LoginPage>
 
         setState(() {
           _isHourlyRateLimited = false;
-          
-          _resendAttemptCount = 0; 
-          
-          _hourlyResendCountdown = 3600; 
-        });
 
+          _resendAttemptCount = 0;
+
+          _hourlyResendCountdown = 3600;
+        });
       } else {
         setState(() {
           _hourlyResendCountdown--;
@@ -458,7 +465,7 @@ class _LoginPageState extends State<LoginPage>
     if (_isHourlyRateLimited) return;
 
     if (_resendAttemptCount >= _maxResendAttempts) {
-        // Langsung panggil timer 1 jam tanpa perlu memanggil Supabase lagi
+      // Langsung panggil timer 1 jam tanpa perlu memanggil Supabase lagi
       _showTopBanner(
         'Batas kirim 2 email/jam telah tercapai. Silakan tunggu 1 jam sebelum mencoba lagi.',
         bg: AppColors.errorBg,
@@ -573,55 +580,82 @@ class _LoginPageState extends State<LoginPage>
     );
   }
 
-  void _handleDeepLink(Uri uri) async {
+  // Deklarasikan fungsi ini di dalam class State Anda
+  Future<bool> _waitForVerification(int timeoutMs, int intervalMs) async {
+    final completer = Completer<bool>();
+    final int maxTries = (timeoutMs / intervalMs).floor();
+    int tries = 0;
+
+    Timer.periodic(Duration(milliseconds: intervalMs), (timer) async {
+      tries++;
+      final user = Supabase.instance.client.auth.currentUser;
+
+      if (user != null && user.emailConfirmedAt != null) {
+        timer.cancel();
+        completer.complete(true);
+      } else if (tries >= maxTries) {
+        timer.cancel();
+        completer.complete(false);
+      }
+    });
+
+    return completer.future;
+  }
+
+  Future<void> _handleDeepLink(Uri uri) async {
     if (_verificationHandled) return;
 
     if (uri.scheme == 'trashvisor') {
-      // Biasanya, Supabase SDK akan secara otomatis memproses token,
-      // kita hanya perlu mengecek status sesi pengguna.
+      // Gunakan polling, bukan Future.delayed statis
+      final isVerificationSuccessful = await _waitForVerification(5000, 100);
 
-      // Beri jeda sebentar agar Supabase punya waktu memproses token
-      await Future.delayed(const Duration(milliseconds: 1000));
-
-      // Cek apakah email sudah terverifikasi setelah klik Deep Link
-      final session = Supabase.instance.client.auth.currentSession;
-
-      // Asumsi: Jika sesi ada dan email sudah terverifikasi, arahkan ke Home.
-      if (session != null && session.user.emailConfirmedAt != null) {
-        // Pastikan context masih valid sebelum navigasi
+      if (isVerificationSuccessful || 
+          Supabase.instance.client.auth.currentUser?.emailConfirmedAt != null) {
+        // === BLOK VERIFIKASI BERHASIL ===
         if (mounted) {
-          _resendTimer?.cancel(); // Batalkan timer hitung mundur jika ada
-          _hourlyRateLimitTimer?.cancel(); // Batalkan timer 1 jam jika ada
+          _resendTimer?.cancel();
+          _hourlyRateLimitTimer?.cancel();
+          _sub?.cancel();
 
           setState(() {
             _verificationHandled = true;
-            _resendEmail = null;
+            _resendEmail = null; // sembunyikan tombol "Kirim Ulang"
             _isResending = false;
             _isHourlyRateLimited = false;
           });
 
-          _sub?.cancel();
-
-          _showTopBanner(
-            'Verifikasi email berhasil! Silakan masuk.',
-            bg: AppColors.successBg,
-            fg: AppColors.successText,
-          );
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (mounted) {
+              _showTopBanner(
+                'Verifikasi email berhasil! Silakan masuk.',
+                bg: AppColors.successBg,
+                fg: AppColors.successText,
+              );
+            }
+          });
         }
       } else {
-        // Jika token Deep Link tidak valid (expired, dll.)
+        // === BLOK GAGAL / KEDALUWARSA (timeout polling) ===
         if (mounted) {
+          final currentUser = Supabase.instance.client.auth.currentUser;
+
+          if (currentUser == null || currentUser.emailConfirmedAt == null) {
+            WidgetsBinding.instance.addPostFrameCallback((_) {
+              if (mounted) {
+                _showTopBanner(
+                  'Silakan login untuk memastikan email Anda sudah terverifikasi.',
+                  bg: Colors.blue,
+                  fg: AppColors.errorText,
+                );
+              }
+            });
+          }
+
+          _sub?.cancel();
+
           setState(() {
             _verificationHandled = true;
           });
-
-          _sub?.cancel();
-
-          _showTopBanner(
-            'Tautan verifikasi tidak valid atau kedaluwarsa. Silakan coba kirim ulang.',
-            bg: AppColors.errorBg,
-            fg: AppColors.errorText,
-          );
         }
       }
     }
