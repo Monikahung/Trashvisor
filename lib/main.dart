@@ -70,6 +70,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Trashvisor App',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       navigatorObservers: [routeObserver],
       theme: ThemeData(

@@ -268,7 +268,10 @@ class _ProfilePageState extends State<ProfilePage>
 
     if (!nav.mounted) return;
     nav.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => LoginPage(cameras: cams)),
+      MaterialPageRoute(builder: (_) => LoginPage(
+        cameras: cams,
+        ignoreDeepLink: true,
+      )),
       (_) => false,
     );
   }

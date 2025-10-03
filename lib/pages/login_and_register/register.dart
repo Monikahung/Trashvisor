@@ -334,6 +334,7 @@ class _RegisterPageState extends State<RegisterPage>
 
   // ---------------------- Aksi tombol Kirim ----------------------
   void _onSubmit() async {
+    // --- [START] VALIDASI FORM ---
     if (_isBlank(_nameC.text)) {
       _banner.show(
         context,
@@ -344,7 +345,7 @@ class _RegisterPageState extends State<RegisterPage>
       return;
     }
     
-    // (BARU) Validasi email di sini juga, tapi kita pakai fungsi _buildEmailError
+    // Validasi email di sini juga, tapi kita pakai fungsi _buildEmailError
     final emailErr = _buildEmailError(_emailC.text);
     if (emailErr != null) {
       setState(() => _emailErrorText = emailErr);
@@ -355,12 +356,16 @@ class _RegisterPageState extends State<RegisterPage>
         showFor: RegisterDimens.bannerShowTime,
       );
       return;
+    } else {
+      setState(() => _emailErrorText = null);
     }
 
     final passErr = _buildPasswordError(_passC.text);
     if (passErr != null) {
       setState(() => _passErrorText = passErr);
       return;
+    } else {
+      setState(() => _passErrorText = null);
     }
 
     if (_isBlank(_confirmC.text)) {
@@ -390,11 +395,14 @@ class _RegisterPageState extends State<RegisterPage>
       );
       return;
     }
+    // --- VALIDASI FORM ---
 
     try {
       final supa = Supabase.instance.client;
 
-      final res = await supa.auth.signUp(
+      // PANGGIL SUPABASE: Melakukan registrasi. 
+      // Supabase akan otomatis mengirimkan email konfirmasi.
+      await supa.auth.signUp(
         email: _emailC.text.trim(),
         password: _passC.text,
         data: {'full_name': _nameC.text.trim()},
@@ -402,26 +410,35 @@ class _RegisterPageState extends State<RegisterPage>
 
       if (!mounted) return;
 
+      // 1. Tampilkan banner sukses di halaman Register
       _banner.show(
         context,
-        res.user == null
-            ? 'Registrasi berhasil, cek email untuk konfirmasi.'
-            : 'Pendaftaran berhasil!',
+        'Registrasi berhasil! Harap cek email Anda untuk verifikasi.',
         bg: AppColors.successBg,
         fg: AppColors.successText,
-        sideMargin: RegisterDimens.bannerSideMargin,
-        showFor: const Duration(milliseconds: 900),
+        showFor: const Duration(milliseconds: 3000), 
         icon: Icons.check_circle_outline,
       );
 
-      await Future.delayed(const Duration(milliseconds: 900));
+      // Beri jeda sebentar agar user melihat banner
+      await Future.delayed(const Duration(milliseconds: 3000));
       
       if (!mounted) return;
 
       _banner.hide();
 
+      // 2. Dialihkan ke halaman Login
+      // Kirim pesan sukses dan email ke halaman Login melalui parameter.
       Navigator.of(context).pushReplacement(
-        MaterialPageRoute(builder: (_) => LoginPage(cameras: widget.cameras)),
+        MaterialPageRoute(
+          builder: (_) => LoginPage(
+            cameras: widget.cameras,
+            // Parameter BARU yang dikirim ke LoginPage
+            initialMessage: 'Verifikasi terkirim. Harap cek kotak masuk email Anda dan Masuk.', 
+            showResendEmail: true,
+            registeredEmail: _emailC.text.trim(),
+          ),
+        ),
       );
     } on AuthException catch (e) {
       _banner.show(

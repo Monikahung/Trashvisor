@@ -4,7 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:trashvisor/pages/login_and_register/register.dart'
     show RegisterPage;
 import '../home_profile_notifications/home.dart' show HomePage;
+import 'forgot_password.dart';
+import 'package:trashvisor/globals.dart';
 import 'package:camera/camera.dart';
+import 'package:app_links/app_links.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase auth
 
 /// ===================================================================
@@ -86,7 +89,7 @@ class LoginDimens {
     milliseconds: 180,
   ); // durasi keluar
   static const Duration bannerShowTime = Duration(
-    milliseconds: 2000,
+    milliseconds: 5000,
   ); // lama tampil
   static const double bannerSideMargin = 12; // jarak kiri/kanan
 }
@@ -117,7 +120,19 @@ class L10n {
 class LoginPage extends StatefulWidget {
   final List<CameraDescription> cameras;
 
-  const LoginPage({super.key, required this.cameras});
+  final String? initialMessage;
+  final bool showResendEmail;
+  final String? registeredEmail;
+  final bool ignoreDeepLink;
+
+  const LoginPage({
+    super.key,
+    required this.cameras,
+    this.initialMessage,
+    this.showResendEmail = false,
+    this.registeredEmail,
+    this.ignoreDeepLink = false,
+  });
 
   @override
   State<LoginPage> createState() => _LoginPageState();
@@ -129,9 +144,24 @@ class _LoginPageState extends State<LoginPage>
   final _emailC = TextEditingController();
   final _passC = TextEditingController();
   bool _obscure = true;
+  bool _verificationHandled = false;
+
+  late final AppLinks _appLinks;
+  StreamSubscription? _sub;
+  int _resendAttemptCount = 0;
+  static const int _maxResendAttempts = 2; // Batas percobaan sebelum 1 jam
 
   // Link "Daftar Sekarang" (gunakan TapGestureRecognizer supaya bisa di-dispose)
   late final TapGestureRecognizer _toRegister;
+
+  // State untuk menyimpan email yang baru didaftarkan (untuk Kirim Ulang)
+  String? _resendEmail; // STATE UNTUK KIRIM ULANG EMAIL
+  bool _isResending = false; // STATE UNTUK MENUNJUKKAN LOADING (JIKA PERLU)
+  Timer? _resendTimer; // TIMER UNTUK MENCEGAH SPAM KIRIM ULANG
+  int _resendCountdown = 0; // DETIK HITUNG MUNDUR KIRIM ULANG
+  bool _isHourlyRateLimited = false; // STATE UNTUK RATE LIMIT 1 JAM
+  Timer? _hourlyRateLimitTimer; // TIMER UNTUK RESET RATE LIMIT 1 JAM
+  int _hourlyResendCountdown = 0; // DETIK HITUNG MUNDUR 1 JAM
 
   // ---------------------- Top Banner (satu controller) ----------------------
   // NOTE (OPS B): Satu controller untuk semua banner. Hindari "multiple tickers" error.
@@ -140,9 +170,28 @@ class _LoginPageState extends State<LoginPage>
   Timer? _bannerTimer; // auto-dismiss timer
   String _bannerMessage = ''; // pesan aktif yang sedang ditampilkan
 
+  String _formatDuration(int totalSeconds) {
+    final duration = Duration(seconds: totalSeconds);
+    String hours = duration.inHours.toString().padLeft(2, '0');
+    String minutes = (duration.inMinutes % 60).toString().padLeft(2, '0');
+    String seconds = (duration.inSeconds % 60).toString().padLeft(2, '0');
+
+    // Hanya tampilkan bagian yang relevan (H:M:S)
+    if (duration.inHours > 0) {
+      return '$hours jam $minutes menit';
+    } else if (duration.inMinutes > 0) {
+      return '$minutes menit $seconds detik';
+    } else {
+      return '$seconds detik';
+    }
+  }
+
   @override
   void initState() {
     super.initState();
+    if (!widget.ignoreDeepLink) {
+      _initUniLinks(); // Panggil fungsi yang mengaktifkan listener stream/initial link
+    }
 
     // (1) Buat controller SEKALI dan di-reuse → lebih efisien & aman memory
     _bannerCtl =
@@ -155,6 +204,7 @@ class _LoginPageState extends State<LoginPage>
           if (status == AnimationStatus.dismissed) {
             _bannerEntry?.remove();
             _bannerEntry = null;
+            _bannerTimer?.cancel();
           }
         });
 
@@ -169,6 +219,28 @@ class _LoginPageState extends State<LoginPage>
           ),
         );
       };
+
+    if (widget.showResendEmail && widget.registeredEmail != null) {
+      _resendEmail = widget.registeredEmail;
+
+      // Isi otomatis field email dengan email yang baru didaftarkan
+      _emailC.text = widget.registeredEmail!;
+
+      _startResendTimer();
+    }
+
+    // Tampilkan pesan sukses/instruksi dari halaman register
+    if (widget.initialMessage != null) {
+      // Kita gunakan Future.microtask untuk memastikan `build` sudah selesai
+      // dan `Overlay` tersedia, baru banner ditampilkan.
+      Future.microtask(
+        () => _showTopBanner(
+          widget.initialMessage!,
+          bg: AppColors.successBg,
+          fg: AppColors.successText,
+        ),
+      );
+    }
   }
 
   @override
@@ -183,6 +255,9 @@ class _LoginPageState extends State<LoginPage>
     _bannerEntry?.remove(); // copot overlay jika masih ada
     _bannerEntry = null;
 
+    _resendTimer?.cancel(); // Pastikan timer dibatalkan
+    _hourlyRateLimitTimer?.cancel();
+    _sub?.cancel();
     super.dispose();
   }
 
@@ -200,6 +275,14 @@ class _LoginPageState extends State<LoginPage>
     Color bg = AppColors.errorBg,
     Color fg = AppColors.errorText,
   }) {
+    final OverlayState? overlay = navigatorKey.currentState?.overlay;
+
+    if (overlay == null) {
+        // Fallback safety check jika Overlay belum siap (walaupun jarang terjadi)
+        debugPrint('ERROR: OverlayState tidak ditemukan. Gagal menampilkan banner.');
+        return;
+    }
+
     _bannerTimer?.cancel(); // reset timer (kalau ada banner yang masih jalan)
     _bannerMessage = message; // simpan pesan yang mau ditampilkan
 
@@ -294,6 +377,253 @@ class _LoginPageState extends State<LoginPage>
     } else {
       _bannerEntry?.remove(); // langsung lepas kalau tidak ada animasi
       _bannerEntry = null;
+    }
+  }
+
+  // ---------------------- Hitung Mundur (60 detik) ----------------------
+  void _startResendTimer() {
+    // Batalkan timer lama jika ada
+    _resendTimer?.cancel();
+
+    // Set state awal
+    if (mounted) {
+      setState(() {
+        _resendCountdown = 60; // Set nilai awal
+        _isResending = true; // Set state tombol ke disabled/countdown
+      });
+    }
+
+    // Buat timer periodik yang berjalan setiap 1 detik
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_resendCountdown <= 1) {
+        // Jika hitungan mundur selesai atau mencapai 0
+        timer.cancel();
+        if (mounted) {
+          setState(() {
+            _isResending = false;
+            _resendCountdown = 0;
+          });
+        }
+      } else {
+        // Kurangi hitungan mundur setiap detik
+        if (mounted) {
+          setState(() {
+            _resendCountdown--;
+            debugPrint('Countdown: $_resendCountdown');
+          });
+        }
+      }
+    });
+  }
+
+  // ---------------------- Hitung Mundur (1 jam) ----------------------
+  void _startHourlyRateLimitTimer() {
+    _hourlyRateLimitTimer?.cancel();
+
+    if (mounted) {
+      setState(() {
+        // Set nilai awal 1 jam (3600 detik)
+        _hourlyResendCountdown = 3600;
+        _isHourlyRateLimited = true;
+      });
+    }
+
+    _hourlyRateLimitTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted) {
+        timer.cancel();
+        return;
+      }
+
+      if (_hourlyResendCountdown == 0) {
+        timer.cancel(); // Hentikan timer
+
+        setState(() {
+          _isHourlyRateLimited = false;
+          
+          _resendAttemptCount = 0; 
+          
+          _hourlyResendCountdown = 3600; 
+        });
+
+      } else {
+        setState(() {
+          _hourlyResendCountdown--;
+        });
+      }
+    });
+  }
+
+  // ---------------------- Kirim Ulang Verifikasi ----------------------
+  void _resendConfirmationEmail() async {
+    if (_isHourlyRateLimited) return;
+
+    if (_resendAttemptCount >= _maxResendAttempts) {
+        // Langsung panggil timer 1 jam tanpa perlu memanggil Supabase lagi
+      _showTopBanner(
+        'Batas kirim 2 email/jam telah tercapai. Silakan tunggu 1 jam sebelum mencoba lagi.',
+        bg: AppColors.errorBg,
+        fg: AppColors.errorText,
+      );
+
+      _startHourlyRateLimitTimer();
+
+      if (mounted) {
+        setState(() {
+          _isHourlyRateLimited = true;
+          _isResending = false; // Pastikan tombol unlock/loading berhenti
+        });
+      }
+
+      return; // Hentikan eksekusi
+    }
+
+    // Pastikan ada email yang bisa dikirim ulang
+    if (_resendEmail == null || _isResending) return;
+
+    // Asumsikan akan menampilkan loading state atau mengunci UI
+    // setState(() => _isResending = true); // Jika ada state _isResending
+    setState(() {
+      _isResending = true; // Set state untuk menonaktifkan tombol
+    });
+
+    try {
+      final supa = Supabase.instance.client;
+      await supa.auth.resend(
+        // Gunakan OtpType.signup
+        type: OtpType.signup,
+        email: _resendEmail!,
+      );
+
+      _resendAttemptCount++;
+
+      // Tampilkan banner sukses
+      _showTopBanner(
+        'Link verifikasi baru sudah terkirim ke $_resendEmail!',
+        bg: AppColors.successBg,
+        fg: AppColors.successText,
+      );
+
+      // Mulai timer hitung mundur setelah sukses
+      _startResendTimer();
+    } on AuthException catch (e) {
+      // JIKA GAGAL: Tangani error, khususnya Rate Limit
+      final String errorMessage = e.message.toLowerCase();
+
+      if (errorMessage.contains('rate limit') ||
+          errorMessage.contains('too many requests')) {
+        // KASUS SPESIFIK: Rate Limit Supabase (2 email/jam) tercapai
+        _showTopBanner(
+          'Batas kirim 2 email/jam telah tercapai. Silakan tunggu 1 jam sebelum mencoba lagi.',
+          bg: AppColors.errorBg,
+          fg: AppColors.errorText,
+        );
+
+        _startHourlyRateLimitTimer(); // Mulai timer 1 jam
+
+        // Karena gagal, kita harus me-reset _isResending agar tombol bisa ditekan lagi,
+        if (mounted) {
+          setState(() {
+            _isResending = false;
+            _isHourlyRateLimited = true;
+          });
+        }
+      } else {
+        // Kasus error Auth Supabase umum lainnya (misalnya, email tidak valid, dll.)
+        _showTopBanner(_mapAuthError(e));
+
+        // Karena gagal, reset _isResending agar tombol bisa dicoba lagi
+        if (mounted) {
+          setState(() => _isResending = false);
+        }
+      }
+    } catch (e) {
+      // Error tak terduga (misalnya koneksi terputus)
+      _showTopBanner(_mapAuthError(e));
+
+      // Reset _isResending
+      if (mounted) {
+        setState(() => _isResending = false);
+      }
+    }
+  }
+
+  // =========================================================
+  // LOGIKA DEEP LINKING
+  // =========================================================
+  void _initUniLinks() async {
+    _appLinks = AppLinks();
+
+    // 1. Initial Link (Hanya untuk peluncuran awal)
+    final Uri? initialUri = await _appLinks.getInitialLink();
+    if (initialUri != null) {
+      _handleDeepLink(initialUri);
+    }
+
+    // 2. Latest Link (Stream untuk event baru)
+    _sub = _appLinks.uriLinkStream.listen(
+      (Uri? uri) {
+        if (uri != null) {
+          _handleDeepLink(uri);
+        }
+      },
+      onError: (err) {
+        // handle error
+        debugPrint("Deep link error: $err");
+      },
+    );
+  }
+
+  void _handleDeepLink(Uri uri) async {
+    if (_verificationHandled) return;
+
+    if (uri.scheme == 'trashvisor') {
+      // Biasanya, Supabase SDK akan secara otomatis memproses token,
+      // kita hanya perlu mengecek status sesi pengguna.
+
+      // Beri jeda sebentar agar Supabase punya waktu memproses token
+      await Future.delayed(const Duration(milliseconds: 1000));
+
+      // Cek apakah email sudah terverifikasi setelah klik Deep Link
+      final session = Supabase.instance.client.auth.currentSession;
+
+      // Asumsi: Jika sesi ada dan email sudah terverifikasi, arahkan ke Home.
+      if (session != null && session.user.emailConfirmedAt != null) {
+        // Pastikan context masih valid sebelum navigasi
+        if (mounted) {
+          _resendTimer?.cancel(); // Batalkan timer hitung mundur jika ada
+          _hourlyRateLimitTimer?.cancel(); // Batalkan timer 1 jam jika ada
+
+          setState(() {
+            _verificationHandled = true;
+            _resendEmail = null;
+            _isResending = false;
+            _isHourlyRateLimited = false;
+          });
+
+          _sub?.cancel();
+
+          _showTopBanner(
+            'Verifikasi email berhasil! Silakan masuk.',
+            bg: AppColors.successBg,
+            fg: AppColors.successText,
+          );
+        }
+      } else {
+        // Jika token Deep Link tidak valid (expired, dll.)
+        if (mounted) {
+          setState(() {
+            _verificationHandled = true;
+          });
+
+          _sub?.cancel();
+
+          _showTopBanner(
+            'Tautan verifikasi tidak valid atau kedaluwarsa. Silakan coba kirim ulang.',
+            bg: AppColors.errorBg,
+            fg: AppColors.errorText,
+          );
+        }
+      }
     }
   }
 
@@ -602,7 +932,16 @@ class _LoginPageState extends State<LoginPage>
                                     alignment: Alignment.centerRight,
                                     child: GestureDetector(
                                       onTap: () {
-                                        /* Forgot password */
+                                        _hideTopBanner();
+
+                                        Navigator.of(context).push(
+                                          MaterialPageRoute(
+                                            builder: (_) =>
+                                                ForgotPasswordScreen(
+                                                  cameras: widget.cameras,
+                                                ),
+                                          ),
+                                        );
                                       },
                                       child: const Text(
                                         'Lupa Password?',
@@ -615,6 +954,46 @@ class _LoginPageState extends State<LoginPage>
                                       ),
                                     ),
                                   ),
+
+                                  const SizedBox(height: 10),
+
+                                  if (_resendEmail != null)
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: GestureDetector(
+                                        // Tombol dinonaktifkan jika sedang cooldown (60s) ATAU Rate Limit 1 jam aktif
+                                        onTap:
+                                            _isResending || _isHourlyRateLimited
+                                            ? null
+                                            : _resendConfirmationEmail,
+                                        child: Text(
+                                          // Prioritas tertinggi: Tampilkan pesan 1 jam jika batas server tercapai
+                                          _isHourlyRateLimited
+                                              ? 'Batas Kirim Ulang Tercapai (Tunggu: ${_formatDuration(_hourlyResendCountdown)})'
+                                              // Prioritas kedua: Tampilkan hitungan mundur 60 detik (client-side cooldown)
+                                              : _isResending
+                                              ? 'Kirim Ulang Email Verifikasi! ($_resendCountdown)'
+                                              // Default: Tampilkan teks biasa (tombol aktif)
+                                              : 'Kirim Ulang Email Verifikasi!',
+
+                                          style: TextStyle(
+                                            // Warna buram jika sedang cooldown (60s) ATAU Rate Limit (1h)
+                                            color:
+                                                _isResending ||
+                                                    _isHourlyRateLimited
+                                                ? AppColors.darkMossGreen
+                                                      .withAlpha(
+                                                        (255 * 0.5).round(),
+                                                      )
+                                                : AppColors.darkMossGreen,
+                                            fontSize: 13,
+                                            fontFamily: 'Nunito',
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+
                                   const SizedBox(
                                     height: LoginDimens.gapBeforeButton,
                                   ),
@@ -707,7 +1086,6 @@ class _FieldLabel extends StatelessWidget {
       style: TextStyle(
         color: AppColors.darkMossGreen,
         fontWeight: FontWeight.bold,
-        // gunakan Nunito Bold sesuai permintaan
         fontFamily: 'Nunito',
         fontSize: 14,
       ),
@@ -737,7 +1115,7 @@ class _AppTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: LoginDimens.fieldHeight, // <<< ubah tinggi field dari sini
+      height: LoginDimens.fieldHeight,
       child: TextField(
         controller: controller,
         obscureText: obscure,

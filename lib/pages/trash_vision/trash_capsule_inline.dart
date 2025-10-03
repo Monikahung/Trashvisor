@@ -346,10 +346,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
           ),
         ),
         Positioned(
-          // =========================================================
-          // 🔧 PERUBAHAN UTAMA: Sesuaikan posisi Top dengan tinggi Status Bar
-          // (Tambahkan 10 sebagai margin di bawah Status Bar)
-          // =========================================================
           top: statusBarHeight + 10,
           left: 20,
           child: GestureDetector(
@@ -373,7 +369,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   }
 
   Widget _sectionTitle(String text) => Padding(
-    // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
     padding: const EdgeInsets.symmetric(horizontal: 24.0),
     child: Text(
       text,
@@ -388,7 +383,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
   );
 
   Widget _divider() => Padding(
-    // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
     padding: const EdgeInsets.symmetric(horizontal: 24.0),
     child: Container(
       height: 1,
@@ -449,7 +443,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
     }
 
     return Padding(
-      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Row(
         children: [
@@ -501,11 +494,9 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
 
   Widget _narrativeCard(CapsuleItem item) {
     return Container(
-      // 🔧 Padding isi kartu narasi
-      padding: const EdgeInsets.all(20), // Disesuaikan agar mirip HandlingTrash
+      padding: const EdgeInsets.all(20),
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        // 🔧 Menggunakan warna alpha yang lebih tebal agar mirip HandlingTrash
         color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: AppColors.fernGreen, width: 1),
@@ -517,7 +508,6 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
             item.title,
             textAlign: TextAlign.left,
             style: const TextStyle(
-              // 🔧 Font size disesuaikan agar mirip HandlingTrash
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: AppColors.darkMossGreen,
@@ -528,9 +518,8 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
           Text(
             item.description,
             textAlign:
-                TextAlign.left, // Dibiarkan left-aligned sesuai instruksi
+                TextAlign.left,
             style: const TextStyle(
-              // 🔧 Font size disesuaikan agar mirip HandlingTrash
               fontSize: 14,
               color: Colors.black,
               fontFamily: 'Roboto',
@@ -552,14 +541,11 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
         ? 'assets/images/features/true_capsule.png'
         : 'assets/images/features/false_capsule.png';
 
-    // Menggunakan SquareHeaderImage yang sudah memiliki padding 24
     if (url != null && url.isNotEmpty) {
       return SquareHeaderImage(imageUrl: url, fallbackAsset: fallback);
     }
 
-    // Pakai fallback, tapi "cover" agar terasa full
     return Padding(
-      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: AspectRatio(
         aspectRatio: 1,
@@ -590,12 +576,10 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
 
   Widget _impactPlaceholder() {
     return Padding(
-      // 🔧 Padding horizontal konten (diubah dari 16 ke 24)
       padding: const EdgeInsets.symmetric(horizontal: 24.0),
       child: Container(
         padding: const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          // 🔧 Menggunakan warna alpha yang lebih tebal agar mirip HandlingTrash
           color: AppColors.fernGreen.withAlpha((255 * 0.15).round()),
           borderRadius: BorderRadius.circular(20),
           border: Border.all(color: AppColors.fernGreen, width: 1),
@@ -659,18 +643,18 @@ class _TrashCapsuleInlineState extends State<TrashCapsuleInline> {
                     textAlign: TextAlign.left,
                     style: const TextStyle(
                       fontFamily: 'Nunito',
-                      fontSize: 22, // Disesuaikan dari 24 ke 22
+                      fontSize: 22,
                       fontWeight: FontWeight.bold,
                       color: AppColors.darkMossGreen,
                     ),
                   ),
-                  const SizedBox(height: 8), // Disesuaikan dari 6 ke 8
+                  const SizedBox(height: 8),
                   Text(
                     desc,
                     textAlign: TextAlign.left,
                     style: const TextStyle(
                       fontFamily: 'Roboto',
-                      fontSize: 14, // Disesuaikan dari 15 ke 14
+                      fontSize: 14,
                       color: Colors.black,
                       height: 1.45,
                     ),
