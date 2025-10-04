@@ -8,28 +8,8 @@ import 'forgot_password.dart';
 import 'package:trashvisor/globals.dart';
 import 'package:camera/camera.dart';
 import 'package:app_links/app_links.dart';
+import 'package:trashvisor/core/colors.dart';
 import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase auth
-
-/// ===================================================================
-///  PALET WARNA GLOBAL (ubah di sini jika mau ganti warna)
-/// ===================================================================
-class AppColors {
-  static const Color green = Color(0xFF528123); // Button Color
-  static const Color deepGreen = Color(0xFF244D24);
-  static const Color blackText = Colors.black; // teks utama
-  static const Color textMuted = Colors.black54; // hint/deskripsi lembut
-  static const Color border = Color(0xFFE0E0E0);
-  static const Color fieldBg = Colors.white;
-  static const Color darkMossGreen = Color(0xFF294B29);
-
-  // Warna & teks untuk top-banner (notifikasi di atas)
-  static const Color errorBg = Color(0xFFEA4335);
-  static const Color errorText = Colors.white;
-
-  // (NEW) warna sukses untuk banner “berhasil”
-  static const Color successBg = Color(0xFF34A853);
-  static const Color successText = Colors.white;
-}
 
 /// ===================================================================
 ///  DIMENSI / KNOB UBAHAN (semua angka tinggal diatur di sini)
@@ -916,7 +896,7 @@ class _LoginPageState extends State<LoginPage>
                                         style: TextStyle(
                                           fontSize: LoginDimens.body,
                                           height: 1.75,
-                                          color: AppColors.blackText,
+                                          color: AppColors.black,
                                           fontFamily: 'Roboto',
                                         ),
                                       ),
@@ -1039,7 +1019,7 @@ class _LoginPageState extends State<LoginPage>
                                     child: ElevatedButton(
                                       onPressed: _onLogin, // validasi + banner
                                       style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.green,
+                                        backgroundColor: AppColors.fernGreen,
                                         foregroundColor: Colors.white,
                                         elevation: 0,
                                         shape: RoundedRectangleBorder(
@@ -1157,7 +1137,7 @@ class _AppTextField extends StatelessWidget {
         textInputAction: textInputAction,
         decoration: InputDecoration(
           filled: true,
-          fillColor: AppColors.fieldBg,
+          fillColor: AppColors.white,
           hintText: hint,
           hintStyle: const TextStyle(
             color: AppColors.textMuted,
@@ -1216,7 +1196,7 @@ class _BrandHeader extends StatelessWidget {
               width: iconSize,
               height: iconSize,
               decoration: BoxDecoration(
-                color: AppColors.green,
+                color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(Icons.eco, size: iconSize * 0.7, color: Colors.white),

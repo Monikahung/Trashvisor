@@ -2,29 +2,9 @@ import 'dart:async';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
+import 'package:trashvisor/core/colors.dart';
 import 'package:trashvisor/pages/login_and_register/login.dart' show LoginPage;
 import 'package:supabase_flutter/supabase_flutter.dart'; // (NEW) Supabase
-
-/// ===================================================================
-///   WARNA (samakan dengan login)
-/// ===================================================================
-class AppColors {
-  static const Color green = Color(0xFF4CAF50);
-  static const Color deepGreen = Color(0xFF244D24);
-  static const Color blackText = Colors.black;
-  static const Color textMuted = Colors.black54;
-  static const Color border = Color(0xFFE0E0E0);
-  static const Color fieldBg = Colors.white;
-  static const Color darkMossGreen = Color(0xFF294B29);
-
-  // Top-banner
-  static const Color errorBg = Color(0xFFEA4335);
-  static const Color errorText = Colors.white;
-
-  // (NEW) Sukses
-  static const Color successBg = Color(0xFF34A853);
-  static const Color successText = Colors.white;
-}
 
 /// ===================================================================
 ///   DIMENSI / KNOB UBAHAN (SEMUA JARAK/UKURAN ADA DI SINI)
@@ -573,7 +553,7 @@ class _RegisterPageState extends State<RegisterPage>
                                         style: TextStyle(
                                           fontSize: RegisterDimens.body,
                                           height: 1.75,
-                                          color: AppColors.blackText,
+                                          color: AppColors.black,
                                           fontFamily: 'Roboto',
                                         ),
                                       ),
@@ -881,7 +861,7 @@ class _AppTextField extends StatelessWidget {
         textInputAction: textInputAction,
         decoration: InputDecoration(
           filled: true,
-          fillColor: AppColors.fieldBg,
+          fillColor: AppColors.white,
           hintText: hint,
           hintStyle: const TextStyle(
             color: AppColors.textMuted,
@@ -937,7 +917,7 @@ class _BrandHeader extends StatelessWidget {
               width: iconSize,
               height: iconSize,
               decoration: BoxDecoration(
-                color: AppColors.green,
+                color: AppColors.fernGreen,
                 borderRadius: BorderRadius.circular(6),
               ),
               child: Icon(Icons.eco, size: iconSize * 0.7, color: Colors.white),

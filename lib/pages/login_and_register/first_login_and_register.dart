@@ -3,15 +3,7 @@ import 'package:trashvisor/pages/login_and_register/login.dart' as auth;
 import 'package:trashvisor/pages/login_and_register/register.dart'
     as reg; // <<< tambah import
 import 'package:camera/camera.dart';
-
-/// =======================================================
-///  WARNA APLIKASI
-/// =======================================================
-class AppColors {
-  static const Color green = Color(0xFF528123);
-  static const Color deepGreen = Color(0xFF244D24);
-  static const Color textMuted = Colors.black87;
-}
+import 'package:trashvisor/core/colors.dart';
 
 /// =======================================================
 ///  KONSTAN / TITIK UBAHAN
@@ -238,7 +230,7 @@ class BrandHeader extends StatelessWidget {
             width: iconSize,
             height: iconSize,
             decoration: BoxDecoration(
-              color: AppColors.green,
+              color: AppColors.fernGreen,
               borderRadius: BorderRadius.circular(6),
             ),
             child: Icon(Icons.eco, size: iconSize * 0.7, color: Colors.white),
@@ -279,7 +271,7 @@ class AuthButtons extends StatelessWidget {
           child: ElevatedButton(
             onPressed: () => NavigationHelper.goToLogin(context, cameras),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green,
+              backgroundColor: AppColors.fernGreen,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
@@ -304,7 +296,7 @@ class AuthButtons extends StatelessWidget {
           child: ElevatedButton(
             onPressed: () => NavigationHelper.goToRegister(context, cameras),
             style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.green,
+              backgroundColor: AppColors.fernGreen,
               foregroundColor: Colors.white,
               elevation: 0,
               shape: RoundedRectangleBorder(
