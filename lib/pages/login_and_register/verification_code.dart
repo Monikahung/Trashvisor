@@ -3,6 +3,7 @@ import 'package:camera/camera.dart';
 import 'dart:io';
 import 'package:trashvisor/core/colors.dart';
 import 'package:flutter/services.dart';
+import 'create_new_password.dart';
 
 // --- Konstan ---
 const String _logoPath = 'assets/images/logo_apk.png';
@@ -82,15 +83,30 @@ class _VerificationCodeScreenState extends State<VerificationCodeScreen> {
       return;
     }
 
-    // Simulasi proses verifikasi
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Verifikasi kode $otpCode...',
-          style: const TextStyle(fontFamily: 'Roboto'),
+    bool verificationSuccess = true; // Simulasi hasil verifikasi
+
+    if (verificationSuccess) {
+      // 1. Tampilkan notifikasi sukses (Opsional)
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Verifikasi berhasil! Silakan buat password baru.',
+            style: TextStyle(fontFamily: 'Roboto'),
+          ),
+          duration: Duration(seconds: 2),
         ),
-      ),
-    );
+      );
+
+      // 2. Navigasi ke Layar Buat Password Baru
+      // Menggunakan pushReplacement agar layar OTP dihapus dari stack navigasi.
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (context) => CreateNewPasswordScreen(
+            cameras: widget.cameras, 
+          ),
+        ),
+      );
+    }
   }
 
   // Fungsi untuk menangani pengiriman ulang kode OTP

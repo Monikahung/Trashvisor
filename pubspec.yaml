@@ -29,6 +29,7 @@ dependencies:
   another_flushbar: ^1.10.28
   timeago: ^3.7.0
   app_links: ^6.2.0
+  top_snackbar_flutter: ^3.3.0
 
 dev_dependencies:
   flutter_test:
