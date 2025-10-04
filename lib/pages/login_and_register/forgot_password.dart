@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'dart:io';
 import 'package:trashvisor/core/colors.dart';
+import 'verification_code.dart';
 
 const String _logoPath = 'assets/images/logo_apk.png';
 const String _illustrationPath =
@@ -48,6 +49,15 @@ class ForgotPasswordScreen extends StatelessWidget {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Permintaan reset password dikirim ke $email!')),
       );
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (context) => VerificationCodeScreen(
+            cameras: cameras, // Teruskan parameter yang dibutuhkan
+          ),
+        ),
+      );
     }
 
     return Scaffold(
@@ -60,6 +70,8 @@ class ForgotPasswordScreen extends StatelessWidget {
           child: AppBar(
             elevation: 0,
             backgroundColor: AppColors.whiteSmoke,
+            scrolledUnderElevation: 0,
+            surfaceTintColor: Colors.transparent,
             automaticallyImplyLeading: false,
             leadingWidth: 40,
             leading: Center(
