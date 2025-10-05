@@ -11,5 +11,9 @@ final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
 ///   scaffoldMessengerKey: rootScaffoldMessengerKey,
 ///   ...
 /// )
+/// 
+
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+
 final RouteObserver<ModalRoute<void>> routeObserver =
     RouteObserver<ModalRoute<void>>();

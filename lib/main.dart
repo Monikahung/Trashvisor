@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:trashvisor/pages/login_and_register/create_new_password.dart';
 import 'package:trashvisor/pages/onboarding/onboarding_page.dart';
 import 'package:trashvisor/pages/home_profile_notifications/home.dart';
 import 'package:trashvisor/pages/login_and_register/first_login_and_register.dart';
@@ -70,6 +71,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'Trashvisor App',
       debugShowCheckedModeBanner: false,
+      navigatorKey: navigatorKey,
       scaffoldMessengerKey: rootScaffoldMessengerKey,
       navigatorObservers: [routeObserver],
       theme: ThemeData(
@@ -119,9 +121,14 @@ class MyApp extends StatelessWidget {
             final session = Supabase.instance.client.auth.currentSession;
             // Cek dan kirimkan status login ke _SplashScreen
             final bool isLoggedIn = session != null;
-            return _SplashScreen(
-              cameras: snapshot.data!,
-              isLoggedIn: isLoggedIn,
+            final List<CameraDescription> cameras = snapshot.data!;
+
+            return AuthStatusHandler(
+              cameras: cameras,
+              child: _SplashScreen(
+                cameras: cameras,
+                isLoggedIn: isLoggedIn,
+              ),
             );
           } else {
             // Perangkat tidak memiliki kamera → fallback UI
@@ -308,5 +315,85 @@ class _SponsorLogo extends StatelessWidget {
       errorBuilder: (_, _, _) =>
           SizedBox(width: kSponsorLogoHeight, height: kSponsorLogoHeight),
     );
+  }
+}
+
+// File: main.dart
+
+class AuthStatusHandler extends StatefulWidget {
+  final Widget child; // Widget yang dibungkus (MyApp)
+  final List<CameraDescription> cameras;
+
+  const AuthStatusHandler({
+    super.key,
+    required this.child,
+    required this.cameras,
+  });
+
+  @override
+  State<AuthStatusHandler> createState() => _AuthStatusHandlerState();
+}
+
+class _AuthStatusHandlerState extends State<AuthStatusHandler> {
+  late final StreamSubscription<AuthState> _authStateSubscription;
+  final SupabaseClient supabase = Supabase.instance.client;
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAuthListener();
+  }
+
+  @override
+  void dispose() {
+    _authStateSubscription.cancel();
+    super.dispose();
+  }
+
+  void _setupAuthListener() {
+    _authStateSubscription = supabase.auth.onAuthStateChange.listen((data) {
+      final AuthChangeEvent event = data.event;
+      final Session? session = data.session;
+
+      if (!mounted) return;
+
+      // Logika hanya berjalan jika ini adalah event reset password
+      if (event == AuthChangeEvent.passwordRecovery) {
+        
+        // Pastikan navigasi hanya jika sesi ada dan ada email
+        if (session != null && session.user.email != null) {
+
+          debugPrint('DEBUG: Deep Link/Password Recovery TERPICU. Menyiapkan navigasi...');
+
+          Future.delayed(const Duration(milliseconds: 1000), () {
+            if (!mounted) return;
+                    
+            // Bersihkan dulu banner/overlayEntry lama
+            rootScaffoldMessengerKey.currentState?.hideCurrentSnackBar(
+              reason: SnackBarClosedReason.remove
+            );
+                    
+            // Navigasi ke CreateNewPasswordScreen
+            navigatorKey.currentState?.pushReplacement(
+              MaterialPageRoute(
+                builder: (context) => CreateNewPasswordScreen(
+                  cameras: widget.cameras,
+                  isFromEmailLink: true,
+                  resendAttemptCount: 0,
+                  email: session.user.email!, 
+                  initialMessage: 'Silakan buat password baru untuk memastikan email Anda sudah terverifikasi.', // Pesan Biru dikirim ke sini
+                ),
+              ),
+            );  
+          });
+        }
+      }
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    // Widget ini hanya bertugas membungkus dan menjalankan listener
+    return widget.child;
   }
 }

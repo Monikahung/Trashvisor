@@ -23,4 +23,14 @@ class AppColors {
   static const Color rewardCardIkonBorder = Color(0xFF447D3A);
   static const Color rewardCardBorder = Color(0xFF719325);
   static const Color bluest = Color(0xFF0000FF);
+
+  static const Color deepGreen = Color(0xFF244D24);
+  static const Color border = Color(0xFFE0E0E0);
+  static const Color textMuted = Colors.black54;
+  static const Color isMet = Color.fromARGB(165, 0, 0, 0);
+
+  static const Color errorBg = Color(0xFFEA4335);
+  static const Color errorText = Colors.white;
+  static const Color successBg = Color(0xFF34A853);
+  static const Color successText = Colors.white;
 }
