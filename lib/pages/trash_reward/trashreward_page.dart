@@ -9,6 +9,7 @@ import 'package:camera/camera.dart';
 import 'scan_video.dart';
 import 'history_page.dart';
 import '../../main.dart';
+import 'quiz_page.dart';
 
 class EcoRewardPage extends StatefulWidget {
   final List<CameraDescription> cameras;
@@ -21,19 +22,12 @@ class EcoRewardPage extends StatefulWidget {
 class _EcoRewardPageState extends State<EcoRewardPage>
     with RouteAware, SingleTickerProviderStateMixin {
   String _formattedDate = '';
-
-  // ====== STATE ======
   final Map<String, bool> _processingMissions = {};
   final Set<String> _claimableMissions = {};
   final Set<String> _completedMissionKeys = {};
   final Set<String> _failedMissionKeys = {};
-
-  // NEW: simpan id baris terakhir yg failed per missionKey (buat di-reuse)
   final Map<String, String> _failedRowIdByKey = {};
-
-  // kunci untuk anti dobel-tap
   final Map<String, bool> _busy = {'checkin': false};
-
   final List<Map<String, dynamic>> _levelThresholds = const [
     {'name': 'Bronze', 'min_score': 0, 'max_score': 1000},
     {'name': 'Silver', 'min_score': 1000, 'max_score': 3000},
@@ -42,13 +36,10 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
   late Future<Map<String, dynamic>> _profileData;
   late Future<List<_DayState>> _dailyRow;
-
-  // toast
   late final AnimationController _toastCtl;
   OverlayEntry? _toastEntry;
   Timer? _toastTimer;
   String _toastMsg = '';
-
   late final RealtimeChannel _channel;
 
   @override
@@ -63,29 +54,26 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       duration: const Duration(milliseconds: 220),
       reverseDuration: const Duration(milliseconds: 180),
     )..addStatusListener((s) {
-        if (s == AnimationStatus.dismissed) {
-          _toastEntry?.remove();
-          _toastEntry = null;
-        }
-      });
+      if (s == AnimationStatus.dismissed) {
+        _toastEntry?.remove();
+        _toastEntry = null;
+      }
+    });
 
     unawaited(_fetchData());
-
     final client = Supabase.instance.client;
-
-    // subscribe ke tabel mission_history
-    _channel = client.channel('public:mission_history')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'mission_history',
-        callback: (payload) {
-          _fetchData(); // setiap ada perubahan di supabase, sync ulang tombol
-        },
-      )
-      .subscribe();
-
-    _fetchData(); // load awal
+    _channel = client
+        .channel('public:mission_history')
+        .onPostgresChanges(
+      event: PostgresChangeEvent.update,
+      schema: 'public',
+      table: 'mission_history',
+      callback: (payload) {
+        _fetchData();
+      },
+    )
+        .subscribe();
+    _fetchData();
   }
 
   @override
@@ -99,24 +87,19 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
   @override
   void didPopNext() {
-    // refresh otomatis ketika user balik dari halaman lain
     _fetchData();
   }
 
   @override
   void dispose() {
     routeObserver.unsubscribe(this);
-
     _toastTimer?.cancel();
     _toastCtl.dispose();
     _toastEntry?.remove();
     _toastEntry = null;
-
     _channel.unsubscribe();
     super.dispose();
   }
-
-  // ======================== DATA FLOW ========================
 
   Future<void> _fetchData() async {
     setState(() {
@@ -134,8 +117,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
     try {
       final today = _yyyyMmDd(_dateOnly(DateTime.now()));
-
-      // PENTING: ambil 'id' juga supaya kita bisa reuse baris failed
       final rows = await client
           .from('mission_history')
           .select('id,status')
@@ -149,7 +130,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       _failedMissionKeys.clear();
       _failedRowIdByKey.clear();
 
-      for (final r in rows as List) {
+      for (final r in rows) {
         final rawStatus = (r['status'] ?? '').toString();
         if (!rawStatus.contains(':')) continue;
 
@@ -164,18 +145,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           case 'processing':
             _processingMissions[missionKey] = true;
             break;
-          case 'completed': // siap klaim
+          case 'completed':
           case 'valid':
           case 'claim':
             _claimableMissions.add(missionKey);
             break;
-          case 'claimed': // yang dianggap "Selesai"
+          case 'claimed':
           case 'complete':
             _completedMissionKeys.add(missionKey);
             break;
           case 'failed':
             _failedMissionKeys.add(missionKey);
-            // Simpan row id gagal PALING TERBARU (order desc sudah dilakukan)
             _failedRowIdByKey.putIfAbsent(missionKey, () => rowId);
             break;
         }
@@ -187,7 +167,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // —— KLAIM (video) ——
   Future<bool> _claimReward(_MissionDef m) async {
     if (_busy[m.key] == true) return false;
     _busy[m.key] = true;
@@ -202,14 +181,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
 
     final ok = await client.rpc(
-          'claim_mission',
-          params: {
-            'p_user_id': user.id,
-            'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
-            'p_key': m.key,
-            'p_points': m.points,
-          },
-        ) as bool? ??
+      'claim_mission',
+      params: {
+        'p_user_id': user.id,
+        'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
+        'p_key': m.key,
+        'p_points': m.points,
+      },
+    ) as bool? ??
         false;
 
     _busy[m.key] = false;
@@ -229,7 +208,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     return ok;
   }
 
-  // —— CHECK-IN (langsung claimed + poin) ——
   Future<void> _autoClaimCheckin(_MissionDef m) async {
     if (_busy['checkin'] == true) return;
     _busy['checkin'] = true;
@@ -245,13 +223,13 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
 
     final ok = await client.rpc(
-          'checkin_claim',
-          params: {
-            'p_user_id': user.id,
-            'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
-            'p_points': m.points,
-          },
-        ) as bool? ??
+      'checkin_claim',
+      params: {
+        'p_user_id': user.id,
+        'p_date': _yyyyMmDd(_dateOnly(DateTime.now())),
+        'p_points': m.points,
+      },
+    ) as bool? ??
         false;
 
     _busy['checkin'] = false;
@@ -269,7 +247,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // Prefetch “Selesai” = hanya claimed
   Future<void> _prefetchCompletedToday() async {
     final client = Supabase.instance.client;
     final user = client.auth.currentUser;
@@ -284,7 +261,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           .eq('mission_date', today);
 
       final keys = <String>{};
-      for (final r in rows as List) {
+      for (final r in rows) {
         final s = (r['status'] ?? '').toString();
         if (s.startsWith('claimed:')) keys.add(s.split(':').last);
       }
@@ -301,13 +278,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
     }
   }
 
-  // ======================== UI HELPERS ========================
-
-  void _showTopToast(
-    String message, {
-    Color bg = AppColors.fernGreen,
-    Color fg = Colors.white,
-  }) {
+  void _showTopToast(String message,
+      {Color bg = AppColors.fernGreen, Color fg = Colors.white}) {
     _toastTimer?.cancel();
     _toastMsg = message;
 
@@ -339,9 +311,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 elevation: 8,
                 borderRadius: BorderRadius.circular(12),
                 child: Padding(
-                  // PERBAIKAN: harus pakai named parameter `padding`
                   padding:
-                      const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                   child: Row(
                     children: [
                       const Icon(Icons.check_circle_outline,
@@ -379,10 +350,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   Future<void> _initializeDate() async {
     await initializeDateFormatting('id_ID', null);
     setState(() {
-      _formattedDate = DateFormat(
-        'EEEE, dd - MM - yyyy',
-        'id_ID',
-      ).format(DateTime.now());
+      _formattedDate =
+          DateFormat('EEEE, dd - MM - yyyy', 'id_ID').format(DateTime.now());
     });
   }
 
@@ -435,6 +404,11 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           title: 'Rekam pembuangan sampah kaleng minuman pada tempatnya',
           icon: Icons.camera_roll_outlined,
           points: p),
+      _MissionDef(
+          key: 'quiz',
+          title: 'Uji Pengetahuan Sampahmu!',
+          icon: Icons.quiz_outlined,
+          points: 100),
     ];
   }
 
@@ -459,11 +433,11 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         return _LevelTheme(
           cardColor: AppColors.oliveGreen,
           iconAndTextColor:
-              AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
           buttonBgColor: AppColors.rewardCardBg,
           iconBgColor: AppColors.rewardCardBg,
           iconBorderColor:
-              AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
+          AppColors.darkOliveGreen.withAlpha((255 * 0.75).round()),
           pointsBorderColor: AppColors.lightSageGreen,
           pointsTextColor: AppColors.whiteSmoke,
           titleColor: AppColors.whiteSmoke,
@@ -493,8 +467,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         );
     }
   }
-
-  // ======================== BUILD UI ========================
 
   @override
   Widget build(BuildContext context) => _buildRoot(context);
@@ -558,14 +530,14 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       children: [
         Container(
           decoration: BoxDecoration(
-            color: AppColors.rewardWhiteTransparent
-                .withAlpha((255 * 0.5).round()),
+            color:
+            AppColors.rewardWhiteTransparent.withAlpha((255 * 0.5).round()),
             shape: BoxShape.circle,
             border: Border.all(color: AppColors.rewardCardBorder, width: 1),
           ),
           child: IconButton(
             icon:
-                const Icon(Icons.arrow_back, color: AppColors.rewardCardBorder),
+            const Icon(Icons.arrow_back, color: AppColors.rewardCardBorder),
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
@@ -704,8 +676,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 const SizedBox(height: 16),
                 LinearProgressIndicator(
                   value: progressValue,
-                  backgroundColor:
-                      Colors.white.withAlpha((255 * 0.5).round()),
+                  backgroundColor: Colors.white.withAlpha((255 * 0.5).round()),
                   color: AppColors.fernGreen,
                   minHeight: 8,
                   borderRadius: BorderRadius.circular(4),
@@ -800,19 +771,17 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                       onPressedAction = isBusy
                           ? null
                           : () async {
-                              final ok = await _claimReward(m);
-                              if (!ok) return;
-                              await _fetchData();
-                            };
+                        final ok = await _claimReward(m);
+                        if (!ok) return;
+                        await _fetchData();
+                      };
                     } else if (isProcessing) {
                       buttonText = 'Proses';
                       onPressedAction = null;
                     } else if (isFailed) {
                       buttonText = 'Ulangi';
                       onPressedAction = () async {
-                        // AMBIL id baris failed untuk di-reuse
                         final reuseId = _failedRowIdByKey[m.key];
-
                         final navContext = context;
                         final popResult = await Navigator.push(
                           navContext,
@@ -821,7 +790,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                               cameras: widget.cameras,
                               missionKey: m.key,
                               missionType: _getMissionType(m.key),
-                              // KIRIMKAN id row failed (boleh null)
                               reuseRowId: reuseId,
                               onValidationComplete: (bool _) async {
                                 if (!mounted) return;
@@ -830,7 +798,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                             ),
                           ),
                         );
-
                         if (!mounted) return;
                         if (popResult == true) {
                           setState(() {
@@ -841,8 +808,21 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         unawaited(_fetchMissionHistory());
                       };
                     } else {
-                      if (m.key == 'checkin') {
-                        buttonText = _busy['checkin'] == true ? '...' : 'Klaim';
+                      if (m.key == 'quiz') {
+                        buttonText = 'Mulai';
+                        onPressedAction = () async {
+                          final result = await Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                                builder: (context) => const QuizPage()),
+                          );
+                          if (result == true && mounted) {
+                            _fetchData();
+                          }
+                        };
+                      } else if (m.key == 'checkin') {
+                        buttonText =
+                        _busy['checkin'] == true ? '...' : 'Klaim';
                         onPressedAction = _busy['checkin'] == true
                             ? null
                             : () => _autoClaimCheckin(m);
@@ -856,7 +836,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                                 bg: Colors.red);
                             return;
                           }
-
                           final navContext = context;
                           final popResult = await Navigator.push(
                             navContext,
@@ -865,7 +844,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                                 cameras: widget.cameras,
                                 missionKey: m.key,
                                 missionType: _getMissionType(m.key),
-                                reuseRowId: null, // mulai baru → insert
+                                reuseRowId: null,
                                 onValidationComplete: (bool _) async {
                                   if (!mounted) return;
                                   await _fetchData();
@@ -873,7 +852,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                               ),
                             ),
                           );
-
                           if (!mounted) return;
                           if (popResult == true) {
                             setState(() {
@@ -965,7 +943,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
             if (days == null) {
               return Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+                const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
                 decoration: BoxDecoration(
                   color: AppColors.white,
                   borderRadius: BorderRadius.circular(20),
@@ -976,8 +954,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                     height: 28,
                     width: 28,
                     child: CircularProgressIndicator(
-                        strokeWidth: 2.4,
-                        color: AppColors.fernGreen),
+                        strokeWidth: 2.4, color: AppColors.fernGreen),
                   ),
                 ),
               );
@@ -985,7 +962,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
             return Container(
               padding:
-                  const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
+              const EdgeInsets.symmetric(horizontal: 8.0, vertical: 16.0),
               decoration: BoxDecoration(
                 color: AppColors.white,
                 borderRadius: BorderRadius.circular(20),
@@ -995,12 +972,12 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: days
                     .map((d) => _buildDayItem(
-                          day: d.label,
-                          eligible: d.eligible,
-                          isCompleted: d.completed,
-                          hasActivity: d.hasActivity,
-                          isCurrent: d.isCurrent,
-                        ))
+                  day: d.label,
+                  eligible: d.eligible,
+                  isCompleted: d.completed,
+                  hasActivity: d.hasActivity,
+                  isCurrent: d.isCurrent,
+                ))
                     .toList(),
               ),
             );
@@ -1035,8 +1012,9 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       inner = const Icon(Icons.cancel, color: Colors.red, size: 24);
     }
 
-    final borderColor =
-        (isProgress || isCurrent) ? AppColors.rewardGreenPrimary : Colors.grey.shade400;
+    final borderColor = (isProgress || isCurrent)
+        ? AppColors.rewardGreenPrimary
+        : Colors.grey.shade400;
     final borderWidth = (isProgress || isCurrent) ? 2.0 : 1.0;
 
     return Column(
@@ -1115,8 +1093,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                       color: isSelected && level['name'] == 'Bronze'
                           ? AppColors.black
                           : isSelected
-                              ? AppColors.white
-                              : (level['iconColor'] as Color),
+                          ? AppColors.white
+                          : (level['iconColor'] as Color),
                       size: 20,
                     ),
                     const SizedBox(width: 8),
@@ -1126,8 +1104,8 @@ class _EcoRewardPageState extends State<EcoRewardPage>
                         color: isSelected && level['name'] == 'Bronze'
                             ? AppColors.black
                             : isSelected
-                                ? AppColors.white
-                                : AppColors.darkMossGreen,
+                            ? AppColors.white
+                            : AppColors.darkMossGreen,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -1140,8 +1118,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
       ),
     );
   }
-
-  // =================== DATA HELPERS ===================
 
   Future<Map<String, dynamic>> _loadProfileAndLevelInfo() async {
     final client = Supabase.instance.client;
@@ -1168,15 +1144,15 @@ class _EcoRewardPageState extends State<EcoRewardPage>
 
       final fullNameFromRow = (row['full_name'] as String?)?.trim();
       final fullName =
-          (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
-              ? fullNameFromRow
-              : (user.email?.split('@').first ?? 'Pengguna');
+      (fullNameFromRow != null && fullNameFromRow.isNotEmpty)
+          ? fullNameFromRow
+          : (user.email?.split('@').first ?? 'Pengguna');
 
       final score = (row['score'] as num?)?.toInt() ?? 0;
 
       final currentLevel = _levelThresholds.firstWhere(
-        (l) =>
-            score >= (l['min_score'] as int) &&
+            (l) =>
+        score >= (l['min_score'] as int) &&
             score < (l['max_score'] as int),
         orElse: () => _levelThresholds.last,
       );
@@ -1198,7 +1174,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
         final range = nextMin - curMin;
         progressValue = range > 0 ? (score - curMin) / range : 1.0;
         progressText =
-            '${nextMin - score} poin menuju level ${next['name']}';
+        '${nextMin - score} poin menuju level ${next['name']}';
       }
 
       return {
@@ -1256,7 +1232,7 @@ class _EcoRewardPageState extends State<EcoRewardPage>
           .gte('mission_date', _yyyyMmDd(monday))
           .lte('mission_date', _yyyyMmDd(sunday));
 
-      for (final r in rows as List) {
+      for (final r in rows) {
         final dStr = r['mission_date'];
         if (dStr == null) continue;
         final d = _dateOnly(DateTime.parse(dStr.toString()));
@@ -1341,7 +1317,6 @@ class _EcoRewardPageState extends State<EcoRewardPage>
   }
 }
 
-// ===== MODELS =====
 class _DayState {
   final String label;
   final DateTime date;
