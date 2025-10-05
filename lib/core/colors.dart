@@ -22,4 +22,5 @@ class AppColors {
   static const Color rewardCardBg = Color(0xFFA2C96C);
   static const Color rewardCardIkonBorder = Color(0xFF447D3A);
   static const Color rewardCardBorder = Color(0xFF719325);
+  static const Color bluest = Color(0xFF0000FF);
 }
