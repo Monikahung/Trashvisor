@@ -299,6 +299,7 @@ class _HistoryTile extends StatelessWidget {
   String _labelForKey(String k) {
     switch (k) {
       case 'checkin':               return 'Check-in harian';
+      case 'quiz':                  return 'Quiz Pengetahuan';
       case 'record_paper':          return 'Rekam sampah kertas';
       case 'record_leaves':         return 'Rekam sampah daun';
       case 'record_plastic_bottle': return 'Rekam botol plastik';
