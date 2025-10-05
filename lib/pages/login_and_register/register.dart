@@ -628,6 +628,7 @@ class _RegisterPageState extends State<RegisterPage>
                                         color: Colors.red.shade700,
                                         fontSize: 12,
                                         height: 1.3,
+                                        fontFamily: 'Roboto',
                                       ),
                                     ),
                                   ],

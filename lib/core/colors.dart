@@ -18,7 +18,12 @@ class AppColors {
   static const Color rewardGreenLight = Color(0xFF86B970);
   static const Color rewardGreenCard = Color(0xFF6F9A5E);
   static const Color rewardGold = Color(0xFFF9A825);
-  static const Color rewardWhiteTransparent = Color.fromRGBO(255, 255, 255, 0.85);
+  static const Color rewardWhiteTransparent = Color.fromRGBO(
+    255,
+    255,
+    255,
+    0.85,
+  );
   static const Color rewardCardBg = Color(0xFFA2C96C);
   static const Color rewardCardIkonBorder = Color(0xFF447D3A);
   static const Color rewardCardBorder = Color(0xFF719325);
@@ -26,6 +31,7 @@ class AppColors {
   static const Color deepGreen = Color(0xFF244D24);
   static const Color border = Color(0xFFE0E0E0);
   static const Color textMuted = Colors.black54;
+  static const Color isMet = Color.fromARGB(165, 0, 0, 0);
 
   static const Color errorBg = Color(0xFFEA4335);
   static const Color errorText = Colors.white;

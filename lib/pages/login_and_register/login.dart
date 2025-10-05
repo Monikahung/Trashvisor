@@ -219,13 +219,22 @@ class _LoginPageState extends State<LoginPage>
     if (widget.initialMessage != null) {
       // Kita gunakan Future.microtask untuk memastikan `build` sudah selesai
       // dan `Overlay` tersedia, baru banner ditampilkan.
-      Future.microtask(
-        () => _showTopBanner(
-          widget.initialMessage!,
-          bg: AppColors.successBg,
-          fg: AppColors.successText,
-        ),
-      );
+      Future.delayed(const Duration(milliseconds: 500), () {
+        // Kemudian, jalankan perintah tampil banner pada frame berikutnya
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+                
+          // Bersihkan dulu local banner/overlayEntry lama
+          _hideTopBanner(); 
+                
+          // Tampilkan pesan sukses dari CreateNewPasswordScreen
+          _showTopBanner(
+            widget.initialMessage!,
+            bg: AppColors.successBg,
+            fg: AppColors.successText,
+          );
+        });   
+      });
     }
   }
 
