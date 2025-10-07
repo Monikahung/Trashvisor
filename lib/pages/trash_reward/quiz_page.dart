@@ -146,16 +146,6 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
-  void _previousQuestion() {
-    // ... (Fungsi ini tidak perlu diubah)
-    _resetAndStartTimer();
-    if (_currentQuestionIndex > 0) {
-      setState(() {
-        _currentQuestionIndex--;
-        _selectedAnswer = _userAnswers[_currentQuestionIndex];
-      });
-    }
-  }
 
 
   @override
