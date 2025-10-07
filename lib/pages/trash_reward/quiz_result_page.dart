@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trashvisor/core/colors.dart';
+import 'package:intl/intl.dart';
 
 final supabase = Supabase.instance.client;
 
@@ -35,6 +36,23 @@ class _QuizResultPageState extends State<QuizResultPage> {
   }
 
   Future<void> _claimQuizReward() async {
+    // Tambahkan logika untuk menangani skor 0 dan mencegah klaim jika skor <= 0
+    if (widget.score <= 0) {
+      if (mounted) {
+        // Notifikasi bahwa kuis bisa diulang jika skor 0
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Skor 0. Kuis bisa diulang!',
+              textAlign: TextAlign.center,
+            ),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+      return;
+    }
+
     if (_isClaiming || _hasClaimed) return;
     setState(() => _isClaiming = true);
 
@@ -42,24 +60,33 @@ class _QuizResultPageState extends State<QuizResultPage> {
       final user = supabase.auth.currentUser;
       if (user == null) throw Exception("Pengguna tidak login.");
 
-      await supabase.rpc('claim_quiz_reward', params: {
-        'p_user_id': user.id,
-        'p_mission_key': 'quiz',
-        'p_points_to_add': widget.score,
-      });
+      // Ambil tanggal hari ini (waktu lokal perangkat)
+      final DateTime now = DateTime.now();
+      // Format tanggal ke string YYYY-MM-DD
+      final String todayDateString = DateFormat('yyyy-MM-dd').format(now);
+
+      await supabase.rpc(
+        'claim_quiz_reward_new',
+        params: {
+          'p_user_id': user.id,
+          'p_mission_key': 'quiz',
+          'p_points_to_add': widget.score,
+          'p_local_date': todayDateString,
+        },
+      );
 
       if (mounted) {
         setState(() => _hasClaimed = true);
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text(
-              'Selamat! +${widget.score} Poin telah ditambahkan.',
+              'Selamat! +${widget.score} poin telah ditambahkan.',
               textAlign: TextAlign.center,
               style: const TextStyle(
                 color: Colors.white,
                 fontFamily: 'Nunito',
                 fontWeight: FontWeight.bold,
-                fontSize: 16,
+                fontSize: 14,
               ),
             ),
             backgroundColor: AppColors.bluest,
@@ -72,11 +99,12 @@ class _QuizResultPageState extends State<QuizResultPage> {
               left: 32.0,
               right: 32.0,
             ),
-            duration: const Duration(seconds: 3),
+            duration: const Duration(seconds: 5),
           ),
         );
       }
     } catch (e) {
+      // Error 42P10 (ON CONFLICT) akan hilang dengan RPC yang baru
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -98,8 +126,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
 
     // Menentukan ukuran dasar berdasarkan lebar layar
     // Ini membantu skala elemen secara proporsional
-    final double baseRadius = screenWidth * 0.22; // Untuk piala
-    final double baseFontSize = screenWidth * 0.07; // Untuk judul "SELAMAT!"
+    final double baseRadius = screenWidth * 0.34; // Untuk piala
 
     return Scaffold(
       body: Container(
@@ -107,7 +134,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
         height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
-            image: AssetImage('assets/images/reward_bg.png'),
+            image: AssetImage('assets/images/bg/bg_reward.png'),
             fit: BoxFit.cover,
           ),
         ),
@@ -122,17 +149,29 @@ class _QuizResultPageState extends State<QuizResultPage> {
                 alignment: Alignment.center,
                 children: [
                   CircleAvatar(
-                      radius: baseRadius, backgroundColor: AppColors.darkOliveGreen),
+                    radius: baseRadius,
+                    backgroundColor: AppColors.darkOliveGreen,
+                  ),
                   CircleAvatar(
-                      radius: baseRadius - 1, backgroundColor: AppColors.lightSageGreen),
+                    radius: baseRadius - 0.5,
+                    backgroundColor: AppColors.lightSageGreen,
+                  ),
                   CircleAvatar(
-                      radius: baseRadius - 21, backgroundColor: AppColors.darkOliveGreen),
+                    radius: baseRadius - 10.5,
+                    backgroundColor: AppColors.darkOliveGreen,
+                  ),
                   CircleAvatar(
-                      radius: baseRadius - 20, backgroundColor: AppColors.avocadoGreen),
+                    radius: baseRadius - 10,
+                    backgroundColor: AppColors.avocadoGreen,
+                  ),
                   CircleAvatar(
-                      radius: baseRadius - 41, backgroundColor: AppColors.darkOliveGreen),
+                    radius: baseRadius - 20.5,
+                    backgroundColor: AppColors.darkOliveGreen,
+                  ),
                   CircleAvatar(
-                      radius: baseRadius - 40, backgroundColor: AppColors.fernGreen),
+                    radius: baseRadius - 20,
+                    backgroundColor: AppColors.fernGreen,
+                  ),
                   Image.asset(
                     'assets/images/features/throphy.png',
                     width: baseRadius * 1.5,
@@ -140,37 +179,46 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   ),
                 ],
               ),
+
               const SizedBox(height: 24),
 
               // Teks dengan ukuran font dinamis
               Text(
                 'SELAMAT!',
                 style: TextStyle(
-                  fontSize: baseFontSize,
+                  fontSize: screenWidth * 0.08,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Nunito',
+                  color: AppColors.fernGreen,
+                  letterSpacing: 0.5,
+                ),
+              ),
+
+              const SizedBox(height: 8),
+
+              Text(
+                'Kamu mendapatkan skor',
+                style: TextStyle(
+                  fontSize: screenWidth * 0.05,
                   fontWeight: FontWeight.w800,
                   fontFamily: 'Nunito',
                   color: AppColors.fernGreen,
                 ),
               ),
-              const SizedBox(height: 8),
-              Text(
-                'Kamu mendapatkan skor',
-                style: TextStyle(
-                    fontSize: baseFontSize * 0.78,
-                    fontWeight: FontWeight.w800,
-                    fontFamily: 'Nunito',
-                    color: AppColors.fernGreen),
-              ),
-              const SizedBox(height: 16),
+
+              const SizedBox(height: 10),
+
               Text(
                 '${widget.correctAnswers}/${widget.totalQuestions}',
                 style: TextStyle(
-                  fontSize: baseFontSize * 1.4,
+                  fontSize: screenWidth * 0.065,
                   fontWeight: FontWeight.bold,
                   fontFamily: 'Nunito',
                   color: AppColors.fernGreen,
+                  letterSpacing: 0.5,
                 ),
               ),
+
               const SizedBox(height: 24),
 
               // Ringkasan Benar / Salah
@@ -190,6 +238,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   ),
                 ],
               ),
+
               const Spacer(flex: 2),
 
               // Tombol Kembali
@@ -202,7 +251,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   foregroundColor: AppColors.white,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(25),
+                    borderRadius: BorderRadius.circular(16),
                   ),
                   elevation: 5,
                 ),
@@ -210,11 +259,13 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   'Kembali ke Misi',
                   style: TextStyle(
                     fontFamily: 'Nunito',
-                    fontSize: 16,
+                    fontSize: 14,
                     fontWeight: FontWeight.bold,
+                    letterSpacing: 0.5,
                   ),
                 ),
               ),
+
               SizedBox(height: screenHeight * 0.05), // Jarak dari bawah layar
             ],
           ),
@@ -233,13 +284,12 @@ class _QuizResultPageState extends State<QuizResultPage> {
       decoration: BoxDecoration(
         color: AppColors.mossGreen,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: AppColors.darkOliveGreen, width: 2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withAlpha((255 * 0.15).round()),
             blurRadius: 8,
             offset: const Offset(0, 4),
-          )
+          ),
         ],
       ),
       child: Row(
@@ -247,18 +297,14 @@ class _QuizResultPageState extends State<QuizResultPage> {
           CircleAvatar(
             radius: 12,
             backgroundColor: AppColors.white,
-            child: Icon(
-              icon,
-              color: color,
-              size: 22,
-            ),
+            child: Icon(icon, color: color, size: 20),
           ),
           const SizedBox(width: 8),
           Text(
             label,
             style: const TextStyle(
               color: Colors.white,
-              fontSize: 18,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               fontFamily: 'Roboto',
             ),
