@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trashvisor/core/colors.dart';
 
-// Panggil Supabase client secara global
 final supabase = Supabase.instance.client;
 
 class QuizResultPage extends StatefulWidget {
@@ -30,56 +29,19 @@ class _QuizResultPageState extends State<QuizResultPage> {
   @override
   void initState() {
     super.initState();
-    // Otomatis klaim hadiah jika ada jawaban benar
     if (widget.correctAnswers > 0) {
       _claimQuizReward();
     }
   }
 
-  /// Menampilkan notifikasi sukses yang sudah disesuaikan gayanya.
-  void _showSuccessSnackbar() {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          'Selamat! +${widget.score} Poin telah ditambahkan.',
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontFamily: 'Nunito',
-            fontWeight: FontWeight.bold,
-            fontSize: 16,
-          ),
-        ),
-        backgroundColor: AppColors.bluest,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
-        ),
-        margin: const EdgeInsets.only(
-          bottom: 100.0,
-          left: 32.0,
-          right: 32.0,
-        ),
-        duration: const Duration(seconds: 3),
-      ),
-    );
-  }
-
-  /// Mengklaim hadiah kuis dengan memanggil Supabase RPC function.
   Future<void> _claimQuizReward() async {
     if (_isClaiming || _hasClaimed) return;
-
-    setState(() {
-      _isClaiming = true;
-    });
+    setState(() => _isClaiming = true);
 
     try {
       final user = supabase.auth.currentUser;
-      if (user == null) {
-        throw Exception("Pengguna tidak login.");
-      }
+      if (user == null) throw Exception("Pengguna tidak login.");
 
-      // Panggil RPC Function untuk menambahkan poin
       await supabase.rpc('claim_quiz_reward', params: {
         'p_user_id': user.id,
         'p_mission_key': 'quiz',
@@ -87,27 +49,62 @@ class _QuizResultPageState extends State<QuizResultPage> {
       });
 
       if (mounted) {
-        setState(() {
-          _hasClaimed = true; // Tandai sudah berhasil klaim
-        });
-        _showSuccessSnackbar(); // Tampilkan notifikasi sukses
+        setState(() => _hasClaimed = true);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Selamat! +${widget.score} Poin telah ditambahkan.',
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontFamily: 'Nunito',
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            backgroundColor: AppColors.bluest,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(20),
+            ),
+            margin: const EdgeInsets.only(
+              bottom: 100.0,
+              left: 32.0,
+              right: 32.0,
+            ),
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     } catch (e) {
-      // Di sini bisa ditambahkan logika untuk menangani error klaim
-      debugPrint('Error claiming quiz reward: $e');
-    } finally {
       if (mounted) {
-        setState(() {
-          _isClaiming = false;
-        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Gagal mengklaim poin: ${e.toString()}'),
+            backgroundColor: Colors.red,
+          ),
+        );
       }
+    } finally {
+      if (mounted) setState(() => _isClaiming = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    // Mengambil informasi ukuran layar
+    final screenWidth = MediaQuery.of(context).size.width;
+    final screenHeight = MediaQuery.of(context).size.height;
+
+    // Menentukan ukuran dasar berdasarkan lebar layar
+    // Ini membantu skala elemen secara proporsional
+    final double baseRadius = screenWidth * 0.22; // Untuk piala
+    final double baseFontSize = screenWidth * 0.07; // Untuk judul "SELAMAT!"
+
     return Scaffold(
       body: Container(
+        width: double.infinity,
+        height: double.infinity,
         decoration: const BoxDecoration(
           image: DecorationImage(
             image: AssetImage('assets/images/reward_bg.png'),
@@ -115,91 +112,89 @@ class _QuizResultPageState extends State<QuizResultPage> {
           ),
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.08),
           child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Spacer(flex: 1),
-              // --- Area Hasil Kuis dan Trofi ---
-              Column(
+              const Spacer(),
+              // Ilustrasi Piala dengan ukuran dinamis
+              Stack(
+                alignment: Alignment.center,
+                children: [
+                  CircleAvatar(
+                      radius: baseRadius, backgroundColor: AppColors.darkOliveGreen),
+                  CircleAvatar(
+                      radius: baseRadius - 1, backgroundColor: AppColors.lightSageGreen),
+                  CircleAvatar(
+                      radius: baseRadius - 21, backgroundColor: AppColors.darkOliveGreen),
+                  CircleAvatar(
+                      radius: baseRadius - 20, backgroundColor: AppColors.avocadoGreen),
+                  CircleAvatar(
+                      radius: baseRadius - 41, backgroundColor: AppColors.darkOliveGreen),
+                  CircleAvatar(
+                      radius: baseRadius - 40, backgroundColor: AppColors.fernGreen),
+                  Image.asset(
+                    'assets/images/features/throphy.png',
+                    width: baseRadius * 1.5,
+                    height: baseRadius * 1.5,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Teks dengan ukuran font dinamis
+              Text(
+                'SELAMAT!',
+                style: TextStyle(
+                  fontSize: baseFontSize,
+                  fontWeight: FontWeight.w800,
+                  fontFamily: 'Nunito',
+                  color: AppColors.fernGreen,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Kamu mendapatkan skor',
+                style: TextStyle(
+                    fontSize: baseFontSize * 0.78,
+                    fontWeight: FontWeight.w800,
+                    fontFamily: 'Nunito',
+                    color: AppColors.fernGreen),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '${widget.correctAnswers}/${widget.totalQuestions}',
+                style: TextStyle(
+                  fontSize: baseFontSize * 1.4,
+                  fontWeight: FontWeight.bold,
+                  fontFamily: 'Nunito',
+                  color: AppColors.fernGreen,
+                ),
+              ),
+              const SizedBox(height: 24),
+
+              // Ringkasan Benar / Salah
+              Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  // Trofi dengan latar belakang berlapis
-                  Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      CircleAvatar(
-                          radius: 171, backgroundColor: AppColors.darkOliveGreen),
-                      CircleAvatar(
-                          radius: 170, backgroundColor: AppColors.lightSageGreen),
-                      CircleAvatar(
-                          radius: 151, backgroundColor: AppColors.darkOliveGreen),
-                      CircleAvatar(
-                          radius: 150, backgroundColor: AppColors.avocadoGreen),
-                      CircleAvatar(
-                          radius: 131, backgroundColor: AppColors.darkOliveGreen),
-                      CircleAvatar(
-                          radius: 130, backgroundColor: AppColors.fernGreen),
-                      Image.asset(
-                        'assets/images/features/throphy.png',
-                        width: 165,
-                        height: 165,
-                      ),
-                    ],
+                  _buildResultChip(
+                    icon: Icons.check_circle,
+                    label: '${widget.correctAnswers}',
+                    color: AppColors.fernGreen,
                   ),
-                  const SizedBox(height: 24),
-                  const Text(
-                    'SELAMAT!',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.w800,
-                      fontFamily: 'Nunito',
-                      color: AppColors.fernGreen,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  const Text(
-                    'Kamu mendapatkan skor',
-                    style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        fontFamily: 'Nunito',
-                        color: AppColors.fernGreen),
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    '${widget.correctAnswers}/${widget.totalQuestions}',
-                    style: const TextStyle(
-                      fontSize: 40,
-                      fontWeight: FontWeight.bold,
-                      fontFamily: 'Nunito',
-                      color: AppColors.fernGreen,
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  // Chips Hasil (Benar/Salah)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      _buildResultChip(
-                        icon: Icons.check_circle,
-                        label: '${widget.correctAnswers}',
-                        color: AppColors.fernGreen,
-                      ),
-                      const SizedBox(width: 16),
-                      _buildResultChip(
-                        icon: Icons.cancel,
-                        label: '${widget.wrongAnswers}',
-                        color: Colors.red,
-                      ),
-                    ],
+                  const SizedBox(width: 16),
+                  _buildResultChip(
+                    icon: Icons.cancel,
+                    label: '${widget.wrongAnswers}',
+                    color: Colors.red,
                   ),
                 ],
               ),
               const Spacer(flex: 2),
-              // --- Tombol Kembali ---
+
+              // Tombol Kembali
               ElevatedButton(
                 onPressed: () {
-                  // Kirim 'true' sebagai hasil saat kembali
                   Navigator.of(context).pop(true);
                 },
                 style: ElevatedButton.styleFrom(
@@ -220,7 +215,7 @@ class _QuizResultPageState extends State<QuizResultPage> {
                   ),
                 ),
               ),
-              const SizedBox(height: 40),
+              SizedBox(height: screenHeight * 0.05), // Jarak dari bawah layar
             ],
           ),
         ),
@@ -228,7 +223,6 @@ class _QuizResultPageState extends State<QuizResultPage> {
     );
   }
 
-  /// Membangun widget Chip untuk menampilkan hasil (Benar/Salah).
   Widget _buildResultChip({
     required IconData icon,
     required String label,
