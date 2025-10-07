@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:trashvisor/core/colors.dart';
@@ -20,13 +21,24 @@ class _QuizPageState extends State<QuizPage> {
   bool _isLoading = true;
   List<Question> _questions = [];
 
+  Timer? _timer;
+  int _secondsLeft = 30;
+  static const int _questionDuration = 30;
+
   @override
   void initState() {
     super.initState();
     _fetchQuestions();
   }
 
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
   Future<void> _fetchQuestions() async {
+    // ... (Fungsi ini tidak perlu diubah)
     try {
       final response = await supabase.from('questions').select().limit(10);
       if (!mounted) return;
@@ -41,6 +53,7 @@ class _QuizPageState extends State<QuizPage> {
         _userAnswers = List<String?>.filled(_questions.length, null);
         _isLoading = false;
       });
+      _resetAndStartTimer();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -52,28 +65,58 @@ class _QuizPageState extends State<QuizPage> {
     }
   }
 
-  void _calculateAndShowResults() async { // Tambahkan async
+  void _resetAndStartTimer() {
+    // ... (Fungsi ini tidak perlu diubah)
+    _timer?.cancel();
+    setState(() {
+      _secondsLeft = _questionDuration;
+    });
+
+    _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (_secondsLeft > 0) {
+        setState(() {
+          _secondsLeft--;
+        });
+      } else {
+        _nextQuestion();
+      }
+    });
+  }
+
+  void _calculateAndShowResults() async {
+    // ... (Fungsi ini tidak perlu diubah)
+    _timer?.cancel();
     int correctAnswers = 0;
     for (int i = 0; i < _questions.length; i++) {
       int? userAnswerIndex;
       switch (_userAnswers[i]) {
-        case 'A': userAnswerIndex = 0; break;
-        case 'B': userAnswerIndex = 1; break;
-        case 'C': userAnswerIndex = 2; break;
-        default: userAnswerIndex = 3;
+        case 'A':
+          userAnswerIndex = 0;
+          break;
+        case 'B':
+          userAnswerIndex = 1;
+          break;
+        case 'C':
+          userAnswerIndex = 2;
+          break;
+        case 'D':
+          userAnswerIndex = 3;
+          break;
+        default:
+          userAnswerIndex = null;
       }
-      if (userAnswerIndex == _questions[i].correctAnswerIndex) {
+      if (userAnswerIndex != null &&
+          userAnswerIndex == _questions[i].correctAnswerIndex) {
         correctAnswers++;
       }
     }
 
     final int totalQuestions = _questions.length;
     final int wrongAnswers = totalQuestions - correctAnswers;
-    final int score = totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100).round() : 0;
+    final int score =
+    totalQuestions > 0 ? ((correctAnswers / totalQuestions) * 100).round() : 0;
 
-    // --- PERUBAHAN UTAMA DI SINI ---
-    // Tunggu hasil dari halaman QuizResultPage
-    final result = await Navigator.push( // Ganti dari pushReplacement
+    final result = await Navigator.pushReplacement(
       context,
       MaterialPageRoute(
         builder: (context) => QuizResultPage(
@@ -85,15 +128,14 @@ class _QuizPageState extends State<QuizPage> {
       ),
     );
 
-    // Jika QuizResultPage kembali dengan sinyal 'true',
-    // maka tutup juga QuizPage ini dan kirim sinyal 'true' ke belakang
     if (result == true && mounted) {
       Navigator.pop(context, true);
     }
-    // --- AKHIR PERUBAHAN ---
   }
 
   void _nextQuestion() {
+    // ... (Fungsi ini tidak perlu diubah)
+    _resetAndStartTimer();
     if (_currentQuestionIndex < _questions.length - 1) {
       setState(() {
         _currentQuestionIndex++;
@@ -105,6 +147,8 @@ class _QuizPageState extends State<QuizPage> {
   }
 
   void _previousQuestion() {
+    // ... (Fungsi ini tidak perlu diubah)
+    _resetAndStartTimer();
     if (_currentQuestionIndex > 0) {
       setState(() {
         _currentQuestionIndex--;
@@ -112,6 +156,7 @@ class _QuizPageState extends State<QuizPage> {
       });
     }
   }
+
 
   @override
   Widget build(BuildContext context) {
@@ -135,13 +180,19 @@ class _QuizPageState extends State<QuizPage> {
             onPressed: () => Navigator.of(context).pop(),
           ),
         ),
-        body: const Center(
+        body: Center(
           child: Padding(
-            padding: EdgeInsets.all(24.0),
+            padding: const EdgeInsets.all(24.0),
             child: Text(
               'Gagal memuat soal. Pastikan koneksi internet Anda stabil dan soal sudah tersedia.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: Colors.white, fontSize: 16),
+              // --- PERUBAHAN: Menggunakan style Body Text ---
+              style: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 16,
+                fontWeight: FontWeight.normal,
+                color: Colors.white,
+              ),
             ),
           ),
         ),
@@ -149,31 +200,38 @@ class _QuizPageState extends State<QuizPage> {
     }
 
     final currentQuestion = _questions[_currentQuestionIndex];
+    // --- PERUBAHAN: Mendapatkan ukuran layar untuk responsivitas ---
     final mediaQuery = MediaQuery.of(context);
+    final screenWidth = mediaQuery.size.width;
+    final screenHeight = mediaQuery.size.height;
 
+    // --- PERUBAHAN: Menggunakan style Heading 2 (Nunito, 20, SemiBold) ---
     const questionTextStyle = TextStyle(
       fontFamily: 'Nunito',
       fontSize: 20,
-      fontWeight: FontWeight.w800,
+      fontWeight: FontWeight.w600, // SemiBold
       color: AppColors.deepForestGreen,
     );
 
-    final double textMaxWidth = mediaQuery.size.width - (55 * 2) - (24 * 2);
+    // --- PERUBAHAN: Lebar maksimal teks disesuaikan dengan lebar layar ---
+    final double textMaxWidth = screenWidth - (screenWidth * 0.2) - (24 * 2);
 
     final textPainter = TextPainter(
-      text: TextSpan(text: currentQuestion.questionText, style: questionTextStyle),
+      text:
+      TextSpan(text: currentQuestion.questionText, style: questionTextStyle),
       textDirection: TextDirection.ltr,
     )..layout(maxWidth: textMaxWidth);
 
     final lineCount = textPainter.computeLineMetrics().length;
 
+    // --- PERUBAHAN: Padding atas disesuaikan dengan tinggi layar ---
     double paddingTopValue;
     if (lineCount >= 5) {
-      paddingTopValue = 150.0;
+      paddingTopValue = screenHeight * 0.13;
     } else if (lineCount == 4) {
-      paddingTopValue = 130.0;
+      paddingTopValue = screenHeight * 0.11;
     } else {
-      paddingTopValue = 100.0;
+      paddingTopValue = screenHeight * 0.09;
     }
 
     return Scaffold(
@@ -182,29 +240,38 @@ class _QuizPageState extends State<QuizPage> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 25.0),
+              // --- PERUBAHAN: Padding horizontal relatif terhadap lebar layar ---
+              padding: EdgeInsets.symmetric(horizontal: screenWidth * 0.06),
               child: _buildHeader(),
             ),
-            const SizedBox(height: 40),
+            // --- PERUBAHAN: Spasi vertikal relatif terhadap tinggi layar ---
+            SizedBox(height: screenHeight * 0.03),
             Expanded(
               child: Stack(
                 clipBehavior: Clip.none,
                 alignment: Alignment.topCenter,
                 children: [
                   Positioned(
-                    top: 70,
-                    left: 30,
-                    right: 30,
-                    bottom: 40,
+                    top: 50,
+                    // --- PERUBAHAN: Posisi kiri dan kanan relatif ---
+                    left: screenWidth * 0.05,
+                    right: screenWidth * 0.05,
+                    bottom: 30,
                     child: Container(
-                      padding: EdgeInsets.fromLTRB(22, paddingTopValue, 22, 18),
+                      padding: EdgeInsets.fromLTRB(
+                          screenWidth * 0.045, // Padding relatif
+                          paddingTopValue,
+                          screenWidth * 0.045, // Padding relatif
+                          16),
                       decoration: BoxDecoration(
                         image: const DecorationImage(
-                          image: AssetImage('assets/images/bg/bg_bubble_quiz.png'),
+                          image: AssetImage(
+                              'assets/images/bg/bg_bubble_quiz.png'),
                           fit: BoxFit.cover,
                         ),
                         borderRadius: BorderRadius.circular(40),
-                        border: Border.all(color: AppColors.fernGreen, width: 2),
+                        border:
+                        Border.all(color: AppColors.fernGreen, width: 2),
                       ),
                       child: SingleChildScrollView(
                         child: _buildAnswerOptions(currentQuestion.options),
@@ -213,8 +280,9 @@ class _QuizPageState extends State<QuizPage> {
                   ),
                   Positioned(
                     top: 10,
-                    left: 55,
-                    right: 55,
+                    // --- PERUBAHAN: Posisi kiri dan kanan relatif ---
+                    left: screenWidth * 0.1,
+                    right: screenWidth * 0.1,
                     child: _buildQuestionCard(currentQuestion.questionText),
                   ),
                 ],
@@ -228,6 +296,7 @@ class _QuizPageState extends State<QuizPage> {
 
   Widget _buildHeader() {
     final bool isLastQuestion = _currentQuestionIndex == _questions.length - 1;
+    final screenWidth = MediaQuery.of(context).size.width;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -237,25 +306,48 @@ class _QuizPageState extends State<QuizPage> {
           children: [
             ElevatedButton.icon(
               onPressed: () => Navigator.of(context).pop(),
-              icon: const Icon(Icons.arrow_back_ios_new, size: 16),
-              label: const Text('Keluar'),
+              icon: const Icon(Icons.arrow_back_ios_new, size: 14),
+              // --- PERUBAHAN: Menggunakan style Small Text (Roboto, 14, Regular) ---
+              label: Text('Keluar', style: TextStyle(
+                fontFamily: 'Roboto',
+                fontSize: 14,
+                fontWeight: FontWeight.normal,
+                color: AppColors.darkMossGreen,
+              ),
+              ),
               style: ElevatedButton.styleFrom(
                 foregroundColor: AppColors.darkMossGreen,
                 backgroundColor: AppColors.white,
                 shape: const StadiumBorder(),
               ),
             ),
+            CircleAvatar(
+              radius: 22,
+              backgroundColor: AppColors.white,
+              child: Text(
+                '$_secondsLeft',
+                // --- PERUBAHAN: Style disamakan dengan Button Text (Nunito, 16, Bold) ---
+                style: const TextStyle(
+                  fontFamily: 'Nunito',
+                  color: AppColors.darkMossGreen,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                ),
+              ),
+            ),
           ],
         ),
-        const SizedBox(height: 20),
+        SizedBox(height: MediaQuery.of(context).size.height * 0.02),
         Padding(
           padding: const EdgeInsets.only(top: 20.0),
           child: Text(
             'Soal ${_currentQuestionIndex + 1}/${_questions.length}',
+            // --- PERUBAHAN: Menggunakan style Heading 1 (Nunito, 24, Bold) ---
             style: const TextStyle(
+              fontFamily: 'Nunito',
               color: AppColors.white,
               fontWeight: FontWeight.bold,
-              fontSize: 24,
+              fontSize: 20,
             ),
           ),
         ),
@@ -267,7 +359,7 @@ class _QuizPageState extends State<QuizPage> {
                 children: List.generate(_questions.length, (index) {
                   return Expanded(
                     child: Container(
-                      height: 8,
+                      height: 6,
                       margin: const EdgeInsets.symmetric(horizontal: 2.5),
                       decoration: BoxDecoration(
                         color: index < _currentQuestionIndex
@@ -282,18 +374,7 @@ class _QuizPageState extends State<QuizPage> {
                 }),
               ),
             ),
-            const SizedBox(width: 8),
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: AppColors.white,
-              child: IconButton(
-                onPressed: _previousQuestion,
-                icon: const Icon(Icons.chevron_left, color: AppColors.darkMossGreen, size: 24),
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(),
-              ),
-            ),
-            const SizedBox(width: 8),
+            const SizedBox(width: 6),
             if (isLastQuestion)
               ElevatedButton(
                 onPressed: _calculateAndShowResults,
@@ -301,11 +382,14 @@ class _QuizPageState extends State<QuizPage> {
                   backgroundColor: AppColors.lightSageGreen,
                   foregroundColor: AppColors.deepForestGreen,
                   shape: const StadiumBorder(),
-                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                  // --- PERUBAHAN: Padding relatif ---
+                  padding:
+                  EdgeInsets.symmetric(horizontal: screenWidth * 0.06, vertical: 12),
                 ),
                 child: const Text(
                   'Selesai',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                  // --- PERUBAHAN: Menggunakan style Button Text (Nunito, 16, Bold) ---
+                  style: TextStyle(fontFamily: 'Nunito', fontWeight: FontWeight.bold, fontSize: 16),
                 ),
               )
             else
@@ -314,7 +398,8 @@ class _QuizPageState extends State<QuizPage> {
                 backgroundColor: AppColors.white,
                 child: IconButton(
                   onPressed: _nextQuestion,
-                  icon: const Icon(Icons.chevron_right, color: AppColors.darkMossGreen, size: 24),
+                  icon: const Icon(Icons.chevron_right,
+                      color: AppColors.darkMossGreen, size: 24),
                   padding: EdgeInsets.zero,
                   constraints: const BoxConstraints(),
                 ),
@@ -328,7 +413,8 @@ class _QuizPageState extends State<QuizPage> {
   Widget _buildQuestionCard(String question) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.all(24),
+      // --- PERUBAHAN: Padding relatif ---
+      padding: EdgeInsets.all(MediaQuery.of(context).size.width * 0.04),
       decoration: BoxDecoration(
         color: AppColors.rewardCardBg,
         borderRadius: BorderRadius.circular(25),
@@ -344,10 +430,11 @@ class _QuizPageState extends State<QuizPage> {
       child: Text(
         question,
         textAlign: TextAlign.center,
+        // --- PERUBAHAN: Menggunakan style Heading 2 (Nunito, 20, SemiBold) ---
         style: const TextStyle(
           fontFamily: 'Nunito',
-          fontSize: 20,
-          fontWeight: FontWeight.bold,
+          fontSize: 18,
+          fontWeight: FontWeight.w600, // SemiBold
           color: AppColors.deepForestGreen,
         ),
       ),
@@ -377,8 +464,8 @@ class _QuizPageState extends State<QuizPage> {
         });
       },
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 16),
-        margin: const EdgeInsets.symmetric(vertical: 12),
+        padding: const EdgeInsets.symmetric(vertical: 10),
+        margin: const EdgeInsets.symmetric(vertical: 10),
         decoration: BoxDecoration(
           color: isSelected ? AppColors.oliveGreen : AppColors.rewardCardBg,
           borderRadius: BorderRadius.circular(40),
@@ -394,34 +481,44 @@ class _QuizPageState extends State<QuizPage> {
         ),
         child: Row(
           children: [
-            const SizedBox(width: 16),
+            const SizedBox(width: 14),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: isSelected ? AppColors.lightSageGreen : AppColors.whiteSmoke.withOpacity(0.7),
+                color: isSelected
+                    ? AppColors.lightSageGreen
+                    : AppColors.whiteSmoke.withOpacity(0.7),
                 border: Border.all(
-                    color: isSelected ? AppColors.darkMossGreen : AppColors.darkMossGreen),
+                    color: isSelected
+                        ? AppColors.darkMossGreen
+                        : AppColors.darkMossGreen),
               ),
               child: Text(
                 option,
-                style: TextStyle(
-                  fontFamily: 'Nunito',
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: isSelected ? AppColors.darkMossGreen : AppColors.darkMossGreen,
-                ),
-              ),
-            ),
-            const SizedBox(width: 16),
-            Expanded(
-              child: Text(
-                text,
+                // --- PERUBAHAN: Style untuk huruf Opsi (A, B, C, D) ---
                 style: TextStyle(
                   fontFamily: 'Nunito',
                   fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: isSelected ? AppColors.white : AppColors.darkMossGreen,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.darkMossGreen,
+                ),
+              ),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.only(right: 14.0),
+                child: Text(
+                  text,
+                  // --- PERUBAHAN: Menggunakan style Body Text (Roboto, 16, Regular) ---
+                  style: TextStyle(
+                    fontFamily: 'Roboto',
+                    fontSize: 16,
+                    fontWeight: FontWeight.normal,
+                    color:
+                    isSelected ? AppColors.white : AppColors.darkMossGreen,
+                  ),
                 ),
               ),
             ),
@@ -434,6 +531,7 @@ class _QuizPageState extends State<QuizPage> {
 
 // --- CLASS MODEL UNTUK DATA SOAL ---
 class Question {
+  // ... (Class ini tidak perlu diubah)
   final String questionText;
   final List<String> options;
   final int correctAnswerIndex;
