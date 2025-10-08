@@ -41,8 +41,13 @@ flutter run
 
 ---
 
-## 🔗 Link Drive
-https://drive.google.com/drive/folders/1Haqvz1a7fzCUf3zbDT6SsYvVNXsxpYPo?usp=sharing
+## 🔗 Link Drive Source Code
+https://drive.google.com/drive/folders/1yojWVRD7avQ1g5oPfY3nJTkgGkVR-5dm?usp=sharing
+
+---
+
+## 🔗 Link Drive Aplikasi
+https://drive.google.com/drive/folders/1Pd5O9ZozM-F3xbq2tqMnDmqRfVArh3FL?usp=sharing
 
 ---
 
